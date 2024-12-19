@@ -38,6 +38,8 @@ petfinder_data['Description'] = petfinder_data['Description'].apply(
     lambda x: tokenizer.tokenize(x) if pd.notnull(x) else x
 )
 
+petfinder_data.drop(columns=['PetID'], inplace=True)
+
 # Replace color columns with corresponding labels
 color_columns = ['Color1', 'Color2', 'Color3']
 for col in color_columns:
