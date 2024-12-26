@@ -3,6 +3,8 @@ import os
 from nltk.tokenize import TreebankWordTokenizer
 import nltk
 import string
+from nltk.util import bigrams
+from collections import defaultdict
 
 # Ensure NLTK is properly installed and setup
 nltk.download('punkt')
@@ -60,19 +62,32 @@ for col in color_columns:
     petfinder_data[col] = petfinder_data[col].replace(color_dict)
 
 # Identify the set of all words that appear in more than 100 unique listings
-from collections import defaultdict
-
 def get_unique_listing_counts(descriptions):
     word_in_listings = defaultdict(set)
+    bigram_in_listings = defaultdict(set)
+    
     for idx, desc in enumerate(descriptions):
         if isinstance(desc, list):
             for word in set(desc):
                 word_in_listings[word].add(idx)
-    return {word: len(indices) for word, indices in word_in_listings.items()}
+            # Get bigrams and count their occurrences
+            for bigram in bigrams(desc):
+                bigram_in_listings[bigram].add(idx)
+    
+    word_counts = {word: len(indices) for word, indices in word_in_listings.items()}
+    bigram_counts = {bigram: len(indices) for bigram, indices in bigram_in_listings.items()}
+    
+    return word_counts, bigram_counts
 
-unique_listing_counts = get_unique_listing_counts(petfinder_data['Description'])
+# Get word and bigram counts
+word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
+
 # Change this line to only include words appearing in at least 100 listings
-frequent_words = {word for word, count in unique_listing_counts.items() if count > 100}
+frequent_words = {word for word, count in word_counts.items() if count > 150}
+frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 150}
+
+# Remove words and bigrams that appear in >92% of listings with any text
+listings_with_text = petfinder_data['Description'].apply(lambda x: isinstance(x, list)).sum()
 
 # Add a column for each word indicating its presence in the description
 for word in frequent_words:
@@ -80,9 +95,17 @@ for word in frequent_words:
         lambda x: 1 if isinstance(x, list) and word in x else 0
     )
 
-# No sorting of word columns anymore
+# Add a column for each bigram indicating its presence in the description
+for bigram in frequent_bigrams:
+    bigram_name = ' '.join(bigram)  # Join the two words in the bigram to make a single string
+    petfinder_data[bigram_name + '.contains'] = petfinder_data['Description'].apply(
+        lambda x: 1 if isinstance(x, list) and bigram[0] in x and bigram[1] in x else 0
+    )
 
-# Reorder the DataFrame columns to have word columns first
+# Remove the Description column
+petfinder_data.drop(columns=['Description'], inplace=True)
+
+# Reorder the DataFrame columns to have word and bigram columns first
 word_columns = [col for col in petfinder_data.columns if col.endswith('.contains')]
 all_columns = [col for col in petfinder_data.columns if not col.endswith('.contains')] + word_columns
 petfinder_data = petfinder_data[all_columns]
@@ -97,6 +120,14 @@ print(f"Processed dataset saved to {output_file}")
 word_count_file = 'frequent_words_counts.txt'
 with open(word_count_file, 'w') as f:
     for word in frequent_words:
-        f.write(f"{word}: {unique_listing_counts[word]}\n")
+        f.write(f"{word}: {word_counts[word]}\n")
 
 print(f"Frequent words and their counts saved to {word_count_file}")
+
+# Create a text file listing the frequent bigrams and their counts
+bigram_count_file = 'frequent_bigrams_counts.txt'
+with open(bigram_count_file, 'w') as f:
+    for bigram in frequent_bigrams:
+        f.write(f"{' '.join(bigram)}: {bigram_counts[bigram]}\n")
+
+print(f"Frequent bigrams and their counts saved to {bigram_count_file}")
