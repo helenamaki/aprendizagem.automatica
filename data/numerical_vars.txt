@@ -8,6 +8,7 @@ Health
 Quantity
 Fee
 Rescuer.NumRescues
+Description.Length
 VideoAmt
 PhotoAmt
 AdoptionSpeed
