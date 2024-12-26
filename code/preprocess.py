@@ -14,9 +14,9 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(current_dir)
 
 # File paths
-state_labels_file = 'state_labels.csv'
-color_labels_file = 'color_labels.csv'
-petfinder_file = 'PetFinder_dataset.csv'
+state_labels_file = '../data/state_labels.csv'
+color_labels_file = '../data/color_labels.csv'
+petfinder_file = '../data/PetFinder_dataset.csv'
 
 # Read the datasets
 state_labels = pd.read_csv(state_labels_file)
@@ -114,13 +114,13 @@ all_columns = [col for col in petfinder_data.columns if not col.endswith('.conta
 petfinder_data = petfinder_data[all_columns]
 
 # Save the processed dataset to a new file
-output_file = 'Processed_PetFinder_dataset.csv'
+output_file = '../data/Processed_PetFinder_dataset.csv'
 petfinder_data.to_csv(output_file, index=False)
 
 print(f"Processed dataset saved to {output_file}")
 
 # Create a text file listing the frequent words and their counts
-word_count_file = 'frequent_words_counts.txt'
+word_count_file = '../data/frequent_words_counts.txt'
 with open(word_count_file, 'w') as f:
     for word in frequent_words:
         f.write(f"{word}: {word_counts[word]}\n")
@@ -128,7 +128,7 @@ with open(word_count_file, 'w') as f:
 print(f"Frequent words and their counts saved to {word_count_file}")
 
 # Create a text file listing the frequent bigrams and their counts
-bigram_count_file = 'frequent_bigrams_counts.txt'
+bigram_count_file = '../data/frequent_bigrams_counts.txt'
 with open(bigram_count_file, 'w') as f:
     for bigram in frequent_bigrams:
         f.write(f"{' '.join(bigram)}: {bigram_counts[bigram]}\n")
