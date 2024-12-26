@@ -85,7 +85,7 @@ def get_unique_listing_counts(descriptions):
 # Get word and bigram counts
 word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
 
-Only include words / bigrams appearing in at least 250 listings
+# Only include words / bigrams appearing in at least 250 listings
 frequent_words = {word for word, count in word_counts.items() if count > 250}
 frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 250}
 
