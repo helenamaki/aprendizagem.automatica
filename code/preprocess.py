@@ -51,6 +51,9 @@ def remove_punctuation(text):
     """Remove punctuation from the text."""
     return ''.join([char for char in text if char not in string.punctuation])
 
+# Add a new column with the length of the description (number of tokens)
+petfinder_data['Description.Length'] = petfinder_data['Description'].apply(lambda x: len(x) if isinstance(x, list) else 0)
+
 # Tokenize the text in the Description column after removing punctuation
 petfinder_data['Description'] = petfinder_data['Description'].apply(
     lambda x: tokenizer.tokenize(remove_punctuation(x.lower())) if pd.notnull(x) else x
@@ -85,7 +88,7 @@ def get_unique_listing_counts(descriptions):
 # Get word and bigram counts
 word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
 
-# Only include words / bigrams appearing in at least 250 listings
+#Only include words / bigrams appearing in at least 250 listings
 frequent_words = {word for word, count in word_counts.items() if count > 250}
 frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 250}
 
