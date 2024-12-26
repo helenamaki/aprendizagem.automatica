@@ -64,7 +64,7 @@ color_columns = ['Color1', 'Color2', 'Color3']
 for col in color_columns:
     petfinder_data[col] = petfinder_data[col].replace(color_dict)
 
-# Identify the set of all words that appear in more than 100 unique listings
+# Identify the set of all words that appear in more than 250 unique listings
 def get_unique_listing_counts(descriptions):
     word_in_listings = defaultdict(set)
     bigram_in_listings = defaultdict(set)
@@ -85,7 +85,7 @@ def get_unique_listing_counts(descriptions):
 # Get word and bigram counts
 word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
 
-# Change this line to only include words appearing in at least 100 listings
+Only include words / bigrams appearing in at least 250 listings
 frequent_words = {word for word, count in word_counts.items() if count > 250}
 frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 250}
 
