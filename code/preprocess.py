@@ -86,11 +86,8 @@ def get_unique_listing_counts(descriptions):
 word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
 
 # Change this line to only include words appearing in at least 100 listings
-frequent_words = {word for word, count in word_counts.items() if count > 100}
-frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 100}
-
-# Remove words and bigrams that appear in >92% of listings with any text
-listings_with_text = petfinder_data['Description'].apply(lambda x: isinstance(x, list)).sum()
+frequent_words = {word for word, count in word_counts.items() if count > 250}
+frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 250}
 
 # Add a column for each word indicating its presence in the description
 for word in frequent_words:
