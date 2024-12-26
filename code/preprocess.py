@@ -38,7 +38,10 @@ petfinder_data['Name'] = petfinder_data['Name'].apply(lambda x: 1 if pd.notnull(
 
 # Replace RescuerID with the number of pets associated with that RescuerID
 rescuer_pet_count = petfinder_data['RescuerID'].value_counts()
-petfinder_data['RescuerID'] = petfinder_data['RescuerID'].map(rescuer_pet_count)
+petfinder_data['Rescuer.NumRescues'] = petfinder_data['RescuerID'].map(rescuer_pet_count)
+
+# Drop the old RescuerID column
+petfinder_data.drop(columns=['RescuerID'], inplace=True)
 
 # Use TreebankWordTokenizer for tokenization
 # Convert text to lowercase before tokenization and remove punctuation
@@ -83,8 +86,8 @@ def get_unique_listing_counts(descriptions):
 word_counts, bigram_counts = get_unique_listing_counts(petfinder_data['Description'])
 
 # Change this line to only include words appearing in at least 100 listings
-frequent_words = {word for word, count in word_counts.items() if count > 150}
-frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 150}
+frequent_words = {word for word, count in word_counts.items() if count > 250}
+frequent_bigrams = {bigram for bigram, count in bigram_counts.items() if count > 250}
 
 # Remove words and bigrams that appear in >92% of listings with any text
 listings_with_text = petfinder_data['Description'].apply(lambda x: isinstance(x, list)).sum()
