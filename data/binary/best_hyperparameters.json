@@ -1,31 +1,31 @@
 {
     "RandomForest": {
         "bootstrap": true,
-        "max_depth": null,
+        "max_depth": 20,
         "max_features": "sqrt",
-        "min_samples_leaf": 1,
-        "min_samples_split": 5,
+        "min_samples_leaf": 2,
+        "min_samples_split": 2,
         "n_estimators": 500
     },
     "DecisionTree": {
         "criterion": "entropy",
-        "max_depth": 20,
+        "max_depth": 10,
         "min_samples_leaf": 1,
         "min_samples_split": 2
     },
     "LogisticRegression": {
-        "C": 0.1,
+        "C": 1,
         "max_iter": 100,
-        "solver": "saga"
+        "solver": "liblinear"
     },
     "KNeighbors": {
         "metric": "manhattan",
-        "n_neighbors": 3,
+        "n_neighbors": 10,
         "weights": "distance"
     },
     "SVC": {
-        "C": 10,
-        "gamma": "scale",
+        "C": 1,
+        "gamma": "auto",
         "kernel": "rbf"
     }
 }
