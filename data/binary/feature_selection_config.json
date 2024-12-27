@@ -1,0 +1,14 @@
+{
+    "selected_features": [
+        "Age",
+        "MaturitySize",
+        "FurLength",
+        "Vaccinated",
+        "Dewormed",
+        "Sterilized",
+        "Health",
+        "Quantity",
+        "Rescuer.NumRescues",
+        "PhotoAmt"
+    ]
+}
