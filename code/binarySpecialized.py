@@ -9,186 +9,186 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
+from sklearn.decomposition import PCA
 import os
 
 # Load dataset
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 
-# Create the new binary target (1 for adoption, 0 for not adopted)
-df['AdoptionBinary'] = df['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
+# Filter for cats (Type == 1) and dogs (Type == 2)
+df_cats = df[df['Type'] == 1]
+df_dogs = df[df['Type'] == 2]
 
-# Function to save hyperparameters to JSON file
-def save_hyperparameters(model_name, hyperparameters, pet_type, filename='../data/'):
-    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
-    folder_path = os.path.join(filename, folder)
-    
-    # Create the directory if it doesn't exist
-    os.makedirs(folder_path, exist_ok=True)
+# Define a function to run the model for a given subset and save results
+def run_model_on_subset(df_subset, output_folder):
+    # Create the new binary target (1 for adoption, 0 for not adopted)
+    df_subset['AdoptionBinary'] = df_subset['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
-    # Set the path for the JSON file
-    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
-    
-    # Load the existing data, if any
-    try:
-        with open(file_path, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        all_params = {}
-
-    # Add the hyperparameters for the current model
-    all_params[model_name] = hyperparameters
-    
-    # Save the updated hyperparameters to the file
-    with open(file_path, 'w') as f:
-        json.dump(all_params, f, indent=4)
-
-# Function to load hyperparameters from JSON file
-def load_hyperparameters(model_name, pet_type, filename='../data/'):
-    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
-    folder_path = os.path.join(filename, folder)
-    
-    # Set the path for the JSON file
-    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
-    
-    # Load the existing data, if any
-    try:
-        with open(file_path, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-
-    # Return the hyperparameters for the given model
-    return all_params.get(model_name, None)
-
-# Define classifiers and parameter grids for tuning
-classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44),
-    'DecisionTree': DecisionTreeClassifier(random_state=44),
-    'LogisticRegression': LogisticRegression(random_state=44),
-    'NaiveBayes': GaussianNB(),
-    'KNeighbors': KNeighborsClassifier(),
-    'SVC': SVC(random_state=44),
-    'Ensemble': VotingClassifier(estimators=[
-        ('rf', RandomForestClassifier(random_state=44)),
-        ('dt', DecisionTreeClassifier(random_state=44)),
-        ('knn', KNeighborsClassifier())
-    ], voting='hard')
-}
-
-# Define parameter grids for tuning
-param_grids = {
-    'RandomForest': {
-        'n_estimators': [100, 200, 500],
-        'max_features': ['auto', 'sqrt', 'log2'],
-        'max_depth': [None, 10, 20],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
-        'bootstrap': [True, False]
-    },
-    'DecisionTree': {
-        'max_depth': [None, 10, 20],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
-        'criterion': ['gini', 'entropy']
-    },
-    'LogisticRegression': {
-        'C': [0.1, 1, 10],
-        'solver': ['liblinear', 'saga'],
-        'max_iter': [100, 200]
-    },
-    'KNeighbors': {
-        'n_neighbors': [3, 5, 10],
-        'weights': ['uniform', 'distance'],
-        'metric': ['euclidean', 'manhattan']
-    },
-    'SVC': {
-        'C': [0.1, 1, 10],
-        'kernel': ['linear', 'rbf'],
-        'gamma': ['scale', 'auto']
-    }
-}
-
-# Hyperparameter tuning flag
-retune_hyperparameters = True  # Change this flag to False to skip tuning
-
-# Function to prepare features and target
-def prepare_data(df_subset):
     # Prepare features (X) and target (y)
-    X = df_subset.drop(['AdoptionSpeed', 'AdoptionBinary', 'Type'], axis=1)  # Drop 'Type' column as it's not a feature
+    X = df_subset.drop(['AdoptionSpeed', 'AdoptionBinary', 'Type'], axis=1)
     y = df_subset['AdoptionBinary']
-    
-    # Separate categorical and numerical columns
+
+    # Separate categorical and numerical features
     categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
     numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
 
-    # Apply one-hot encoding to categorical variables
+    # Apply one-hot encoding to categorical variables and keep the numerical ones as is
     X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
     X_numerical = X[numerical_vars]
-    
+
     # Combine numerical and categorical features back together
     X = pd.concat([X_numerical, X_categorical], axis=1)
 
-    return X, y
+    # Perform PCA on the .contains columns
+    contains_columns = [col for col in X.columns if col.endswith('.contains')]
+    X_contains = X[contains_columns]
+    X_non_contains = X.drop(contains_columns, axis=1)
 
-# Function to evaluate models for a given pet type (dogs or cats)
-def evaluate_models(X, y, classifiers, param_grids, retune_hyperparameters, pet_type):
+    # Apply PCA with fewer components for faster computation
+    pca = PCA(n_components=5)  # Use 5 components to speed up PCA
+    X_contains_pca = pca.fit_transform(X_contains)
+
+    # Print the amount of variance explained by the 5 components
+    print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
+
+    # Combine PCA results with the non-.contains columns
+    X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
+
+    # Define classifiers and parameter grids for tuning
+    classifiers = {
+        'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50),  # Increase depth & estimators
+        'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15),  # Increase depth
+        'LogisticRegression': LogisticRegression(random_state=44, max_iter=100),  # Keep it simple
+        'NaiveBayes': GaussianNB(),  # NaiveBayes is already fast
+        'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7),  # Increase neighbors
+        'SVC': SVC(),  # Placeholder for SVC
+        'Ensemble': VotingClassifier(estimators=[
+            ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=100)),
+            ('dt', DecisionTreeClassifier(random_state=44, max_depth=15)),
+            ('knn', KNeighborsClassifier(n_jobs=-1, n_neighbors=7))
+        ], voting='hard')
+    }
+
+    # Define parameter grids for tuning (with slightly increased values)
+    param_grids = {
+        'RandomForest': {
+            'n_estimators': [50, 100],  # Increased number of estimators for a better model
+            'max_features': ['sqrt'],  # Keep the number of features low
+            'max_depth': [10, 15],  # Increased depth slightly
+            'min_samples_split': [2],  # Keep the split simple
+            'min_samples_leaf': [1],  # Keep the leaf size small
+            'bootstrap': [True]
+        },
+        'DecisionTree': {
+            'max_depth': [10, 12],  # Increased depth slightly
+            'min_samples_split': [2],
+            'min_samples_leaf': [1],
+            'criterion': ['gini', 'entropy']
+        },
+        'LogisticRegression': {
+            'C': [0.1, 1],  # Limit search space for regularization strength
+            'solver': ['liblinear'],  # Choose faster solver
+            'max_iter': [100]  # Limit iterations for faster convergence
+        },
+        'KNeighbors': {
+            'n_neighbors': [5, 7],  # Increased neighbors slightly
+            'weights': ['uniform'],
+            'metric': ['euclidean']  # Keep distance metric simple
+        },
+        'SVC': {
+            'C': [0.1, 1, 10],  # Tune C with reasonable values
+            'gamma': ['auto', 'scale', 0.1],  # Tune gamma with reasonable values
+            'kernel': ['rbf']  # Stick to rbf kernel for efficiency
+        }
+    }
+
+    # File path for saving/loading hyperparameters
+    hyperparameters_file = os.path.join(output_folder, 'hyperparameters.json')
+
+    # Load hyperparameters from JSON if they exist
+    if os.path.exists(hyperparameters_file):
+        with open(hyperparameters_file, 'r') as f:
+            saved_hyperparameters = json.load(f)
+        print("Loaded saved hyperparameters from file.")
+    else:
+        saved_hyperparameters = {}
+
+    # Hyperparameter tuning flag
+    retune_hyperparameters = True  # Change this flag to False to skip tuning
+
+    # Perform hyperparameter tuning (GridSearchCV) if necessary
+    for model_name, clf in classifiers.items():
+        if model_name == "NaiveBayes" or model_name == "Ensemble":
+            continue
+        # Check if we need to retune
+        if model_name in saved_hyperparameters and not retune_hyperparameters:
+            print(f"Using saved hyperparameters for {model_name}.")
+            clf.set_params(**saved_hyperparameters[model_name])
+        else:
+            print(f"\nTuning hyperparameters for {model_name}...")
+
+            # Set up GridSearchCV for the current model with parallelization
+            grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+            grid_search.fit(X_final, y)
+
+            # Get the best parameters and model
+            best_params = grid_search.best_params_
+
+            # Save the best parameters for later use
+            saved_hyperparameters[model_name] = best_params
+
+            # Create the model with the best parameters
+            clf.set_params(**best_params)
+            print(f"Best hyperparameters for {model_name}: {best_params}")
+
+    # Save hyperparameters to JSON file after tuning
+    with open(hyperparameters_file, 'w') as f:
+        json.dump(saved_hyperparameters, f, indent=4)
+        print(f"Saved hyperparameters to {hyperparameters_file}")
+
+    # Perform cross-validation with parallelization and print results
+    for model_name, clf in classifiers.items():
+        print(f"\nEvaluating {model_name}...")
+        cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+        print(f"Cross-Validation Accuracy Scores: {cv_results}")
+        print(f"Mean Accuracy: {cv_results.mean():.4f}")
+        print(f"Standard Deviation: {cv_results.std():.4f}")
+
+        # Fit the model and predict
+        clf.fit(X_final, y)
+        y_pred = clf.predict(X_final)
+
+        # Confusion Matrix
+        cm = confusion_matrix(y, y_pred)
+        print(f"Confusion Matrix for {model_name}:\n{cm}")
+
+        # Classification Report
+        report = classification_report(y, y_pred)
+        print(f"Classification Report for {model_name}:\n{report}")
+
+    # Example of evaluating ensemble (VotingClassifier)
+    ensemble_clf = classifiers['Ensemble']
+    ensemble_clf.fit(X_final, y)
+    y_pred_ensemble = ensemble_clf.predict(X_final)
+
+    # Confusion Matrix for Ensemble
+    cm_ensemble = confusion_matrix(y, y_pred_ensemble)
+    print(f"Confusion Matrix for Ensemble:\n{cm_ensemble}")
+
+    # Classification Report for Ensemble
+    report_ensemble = classification_report(y, y_pred_ensemble)
+    print(f"Classification Report for Ensemble:\n{report_ensemble}")
+
+    # Optionally: Save all results in a summary dataframe
     results = {
         'Model': [],
         'Mean Accuracy': [],
         'Std Accuracy': []
     }
 
+    # Cross-validation results and performance summary
     for model_name, clf in classifiers.items():
-        if model_name == "NaiveBayes" or model_name == "Ensemble":
-            continue
-        # Check if we need to retune
-        if retune_hyperparameters:
-            print(f"\nTuning hyperparameters for {model_name}...")
-
-            # Check if hyperparameters are already saved
-            best_params = load_hyperparameters(model_name, pet_type)
-
-            if best_params is None:
-                print(f"No saved hyperparameters found for {model_name}, starting grid search...")
-
-                # Set up GridSearchCV for the current model with parallelization
-                grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-                grid_search.fit(X, y)
-
-                # Get the best parameters and model
-                best_params = grid_search.best_params_
-
-                # Save the best hyperparameters
-                save_hyperparameters(model_name, best_params, pet_type)
-                print(f"Best hyperparameters for {model_name}: {best_params}")
-            else:
-                print(f"Using saved hyperparameters for {model_name}: {best_params}")
-            
-            # Create the model with the best parameters
-            clf.set_params(**best_params)
-        else:
-            print(f"Skipping tuning for {model_name}, using default parameters.")
-        
-        # Perform cross-validation with parallelization
-        print(f"\nEvaluating {model_name}...")
-        cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-        print(f"Cross-Validation Accuracy Scores: {cv_results}")
-        print(f"Mean Accuracy: {cv_results.mean():.4f}")
-        print(f"Standard Deviation: {cv_results.std():.4f}")
-        
-        # Fit the model and predict
-        clf.fit(X, y)
-        y_pred = clf.predict(X)
-        
-        # Confusion Matrix
-        cm = confusion_matrix(y, y_pred)
-        print(f"Confusion Matrix for {model_name}:\n{cm}")
-        
-        # Classification Report
-        report = classification_report(y, y_pred)
-        print(f"Classification Report for {model_name}:\n{report}")
-        
-        # Add cross-validation results to summary
+        cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
         results['Model'].append(model_name)
         results['Mean Accuracy'].append(cv_results.mean())
         results['Std Accuracy'].append(cv_results.std())
@@ -199,14 +199,14 @@ def evaluate_models(X, y, classifiers, param_grids, retune_hyperparameters, pet_
     print("\nSummary of Model Performance:\n")
     print(summary_df)
 
-# Evaluate models for dogs
-print("\nEvaluating Models for Dogs:")
-df_dogs = df[df['Type'] == 1].copy()
-X_dogs, y_dogs = prepare_data(df_dogs)
-evaluate_models(X_dogs, y_dogs, classifiers, param_grids, retune_hyperparameters, pet_type=1)
+    # Save summary to file
+    summary_df.to_csv(os.path.join(output_folder, 'model_performance_summary.csv'), index=False)
+    print(f"Saved model performance summary to {output_folder}/model_performance_summary.csv")
 
-# Evaluate models for cats
-print("\nEvaluating Models for Cats:")
-df_cats = df[df['Type'] == 2].copy()
-X_cats, y_cats = prepare_data(df_cats)
-evaluate_models(X_cats, y_cats, classifiers, param_grids, retune_hyperparameters, pet_type=2)
+# Create output folders for cats and dogs if they don't exist
+os.makedirs('binaryCats', exist_ok=True)
+os.makedirs('binaryDogs', exist_ok=True)
+
+# Run the model for cats and dogs separately
+run_model_on_subset(df_cats, 'binaryCats')
+run_model_on_subset(df_dogs, 'binaryDogs')
