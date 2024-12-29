@@ -12,15 +12,7 @@ from sklearn.svm import SVC
 from sklearn.decomposition import PCA
 import os
 
-# Load dataset
-df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
-
-# Filter for dogs (Type == 1) and cats (Type == 2)
-df_dogs = df[df['Type'] == 1]  # Dogs
-df_cats = df[df['Type'] == 2]  # Cats
-
-# Define a function to run the model for a given subset and save results
-def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
+def run_model_on_subset(df_subset, hyperparameters_file, animal_type):
     # Create the new binary target (1 for adoption, 0 for not adopted)
     df_subset['AdoptionBinary'] = df_subset['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
@@ -56,12 +48,12 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
 
     # Define classifiers and parameter grids for tuning
     classifiers = {
-        'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50),  # Increase depth & estimators
-        'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15),  # Increase depth
-        'LogisticRegression': LogisticRegression(random_state=44, max_iter=100),  # Keep it simple
-        'NaiveBayes': GaussianNB(),  # NaiveBayes is already fast
-        'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7),  # Increase neighbors
-        'SVC': SVC(),  # Placeholder for SVC
+        'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50),
+        'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15),
+        'LogisticRegression': LogisticRegression(random_state=44, max_iter=100),
+        'NaiveBayes': GaussianNB(),
+        'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7),
+        'SVC': SVC(),
         'Ensemble': VotingClassifier(estimators=[
             ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=100)),
             ('dt', DecisionTreeClassifier(random_state=44, max_depth=15)),
@@ -69,40 +61,7 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
         ], voting='hard')
     }
 
-    # Define parameter grids for tuning (with slightly increased values)
-    param_grids = {
-        'RandomForest': {
-            'n_estimators': [50, 100],  # Increased number of estimators for a better model
-            'max_features': ['sqrt'],  # Keep the number of features low
-            'max_depth': [10, 15],  # Increased depth slightly
-            'min_samples_split': [2],  # Keep the split simple
-            'min_samples_leaf': [1],  # Keep the leaf size small
-            'bootstrap': [True]
-        },
-        'DecisionTree': {
-            'max_depth': [10, 12],  # Increased depth slightly
-            'min_samples_split': [2],
-            'min_samples_leaf': [1],
-            'criterion': ['gini', 'entropy']
-        },
-        'LogisticRegression': {
-            'C': [0.1, 1],  # Limit search space for regularization strength
-            'solver': ['liblinear'],  # Choose faster solver
-            'max_iter': [100]  # Limit iterations for faster convergence
-        },
-        'KNeighbors': {
-            'n_neighbors': [5, 7],  # Increased neighbors slightly
-            'weights': ['uniform'],
-            'metric': ['euclidean']  # Keep distance metric simple
-        },
-        'SVC': {
-            'C': [0.1, 1, 10],  # Tune C with reasonable values
-            'gamma': ['auto', 'scale', 0.1],  # Tune gamma with reasonable values
-            'kernel': ['rbf']  # Stick to rbf kernel for efficiency
-        }
-    }
-
-    # Load hyperparameters from JSON if they exist
+    # Load hyperparameters if they exist
     if os.path.exists(hyperparameters_file):
         with open(hyperparameters_file, 'r') as f:
             saved_hyperparameters = json.load(f)
@@ -111,7 +70,7 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
         saved_hyperparameters = {}
 
     # Hyperparameter tuning flag
-    retune_hyperparameters = not bool(saved_hyperparameters)  # If no hyperparameters found, retune
+    retune_hyperparameters = False
 
     # Perform hyperparameter tuning (GridSearchCV) if necessary
     for model_name, clf in classifiers.items():
@@ -124,8 +83,41 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
         else:
             print(f"\nTuning hyperparameters for {model_name}...")
 
+            # Define parameter grids for tuning (for simplicity, some values are pre-defined)
+            param_grids = {
+                'RandomForest': {
+                    'n_estimators': [50, 100],
+                    'max_features': ['sqrt'],
+                    'max_depth': [10, 15],
+                    'min_samples_split': [2],
+                    'min_samples_leaf': [1],
+                    'bootstrap': [True]
+                },
+                'DecisionTree': {
+                    'max_depth': [10, 12],
+                    'min_samples_split': [2],
+                    'min_samples_leaf': [1],
+                    'criterion': ['gini', 'entropy']
+                },
+                'LogisticRegression': {
+                    'C': [0.1, 1],
+                    'solver': ['liblinear'],
+                    'max_iter': [100]
+                },
+                'KNeighbors': {
+                    'n_neighbors': [5, 7],
+                    'weights': ['uniform'],
+                    'metric': ['euclidean']
+                },
+                'SVC': {
+                    'C': [0.1, 1, 10],
+                    'gamma': ['auto', 'scale', 0.1],
+                    'kernel': ['rbf']
+                }
+            }
+
             # Set up GridSearchCV for the current model with parallelization
-            grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+            grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)
             grid_search.fit(X_final, y)
 
             # Get the best parameters and model
@@ -144,9 +136,11 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
         print(f"Saved hyperparameters to {hyperparameters_file}")
 
     # Perform cross-validation with parallelization and print results
+    results = {'Model': [], 'Mean Accuracy': [], 'Std Accuracy': []}
+
     for model_name, clf in classifiers.items():
         print(f"\nEvaluating {model_name}...")
-        cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+        cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)
         print(f"Cross-Validation Accuracy Scores: {cv_results}")
         print(f"Mean Accuracy: {cv_results.mean():.4f}")
         print(f"Standard Deviation: {cv_results.std():.4f}")
@@ -163,20 +157,38 @@ def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
         report = classification_report(y, y_pred)
         print(f"Classification Report for {model_name}:\n{report}")
 
-    # Example of evaluating ensemble (VotingClassifier)
-    ensemble_clf = classifiers['Ensemble']
-    ensemble_clf.fit(X_final, y)
-    y_pred_ensemble = ensemble_clf.predict(X_final)
+        # Save results for the summary dataframe
+        results['Model'].append(model_name)
+        results['Mean Accuracy'].append(cv_results.mean())
+        results['Std Accuracy'].append(cv_results.std())
 
-    # Confusion Matrix for Ensemble
-    cm_ensemble = confusion_matrix(y, y_pred_ensemble)
-    print(f"Confusion Matrix for Ensemble:\n{cm_ensemble}")
-
-    # Classification Report for Ensemble
-    report_ensemble = classification_report(y, y_pred_ensemble)
-    print(f"Classification Report for Ensemble:\n{report_ensemble}")
+    # Convert results to DataFrame for easy visualization
+    summary_df = pd.DataFrame(results)
+    summary_df = summary_df.sort_values(by='Mean Accuracy', ascending=False)
+    print("\nSummary of Model Performance:")
+    print(summary_df)
 
 
-# Run model for dogs and cats separately
-run_model_on_subset(df_dogs, '../data/binaryDogs', '../data/binaryDogHyperparameters.json')
-run_model_on_subset(df_cats, '../data/binaryCats', '../data/binaryCatHyperparameters.json')
+# Main function for running both Dog and Cat models
+def main():
+    # Load the original dataset
+    df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
+
+    # Filter subsets for Dogs (Type == 1) and Cats (Type == 2)
+    df_dogs = df[df['Type'] == 1]
+    df_cats = df[df['Type'] == 2]
+
+    # Run model for Dogs
+    print("\nRunning model for Dogs (Type = 1)...")
+    dog_hyperparameters_file = '../data/binary/DogHyperparameters.json'
+    run_model_on_subset(df_dogs, dog_hyperparameters_file, 'dog')
+
+    # Run model for Cats
+    print("\nRunning model for Cats (Type = 2)...")
+    cat_hyperparameters_file = '../data/binary/CatHyperparameters.json'
+    run_model_on_subset(df_cats, cat_hyperparameters_file, 'cat')
+
+
+# Call the main function
+if __name__ == "__main__":
+    main()
