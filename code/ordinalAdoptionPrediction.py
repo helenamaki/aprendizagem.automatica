@@ -96,11 +96,13 @@ importance_df = pd.DataFrame({
 })
 importance_df = importance_df.sort_values(by='Importance', ascending=False)
 
-# Step 4: Select the top 50 most important features
-top_50_important_features = importance_df['Feature'].head(50).values
+# Reduce columns for SVC to include top 50 .contains columns and all other columns
+contains_columns = [col for col in X.columns if '.contains' in col]
+top_50_contains_columns = contains_columns[:50]  # Choose top 50 columns
+remaining_columns = [col for col in X.columns if '.contains' not in col]  # Other columns
 
-# Step 5: Filter the X dataset to only include the top 50 most important .contains columns (for SVC only)
-X_svc = X[top_50_important_features]
+# Create the final feature set for SVC (top 50 .contains columns + all other columns)
+X_svc = X[top_50_contains_columns + remaining_columns]
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
