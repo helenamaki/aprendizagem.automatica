@@ -97,13 +97,13 @@ param_grids = {
     'RandomForest': {
         'n_estimators': [100, 200, 500],
         'max_features': ['sqrt', 'log2'],
-        'max_depth': [None, 10, 20],
+        'max_depth': [10, 20, 30],
         'min_samples_split': [2, 5],
         'min_samples_leaf': [1, 2],
         'bootstrap': [True, False]
     },
     'DecisionTree': {
-        'max_depth': [None, 10, 20],
+        'max_depth': [10, 20, 30],
         'min_samples_split': [2, 5],
         'min_samples_leaf': [1, 2],
         'criterion': ['gini', 'entropy']
@@ -117,6 +117,11 @@ param_grids = {
         'n_neighbors': [3, 5, 10],
         'weights': ['uniform', 'distance'],
         'metric': ['euclidean', 'manhattan']
+    },
+    'SVC': {
+        'C': [1],
+        'gamma': ['auto'],
+        'kernel': ['rbf', 'linear', 'poly']  # Stick to simpler kernel
     }
 }
 
