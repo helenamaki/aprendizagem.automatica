@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import json
-from sklearn.model_selection import KFold, cross_val_score, GridSearchCV
+from sklearn.model_selection import KFold, GridSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
@@ -39,6 +39,7 @@ X_non_contains = X.drop(contains_columns, axis=1)
 pca = PCA(n_components=5)  # Use 5 components to speed up PCA
 X_contains_pca = pca.fit_transform(X_contains)
 
+
 # Print the amount of variance explained by the 5 components
 print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
 
@@ -47,14 +48,14 @@ X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
 
 # Define classifiers
 classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50), 
+    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=12, n_estimators=70), 
     'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15), 
     'LogisticRegression': LogisticRegression(random_state=44, max_iter=100), 
     'NaiveBayes': GaussianNB(),  
     'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7), 
     'SVC': SVC(),  
     'Ensemble': VotingClassifier(estimators=[
-        ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=100)),
+        ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=70)),
         ('dt', DecisionTreeClassifier(random_state=44, max_depth=15)),
         ('knn', KNeighborsClassifier(n_jobs=-1, n_neighbors=7))
     ], voting='hard')
@@ -63,7 +64,7 @@ classifiers = {
 # Define parameter grids for tuning (with slightly increased values)
 param_grids = {
     'RandomForest': {
-        'n_estimators': [50, 80],  
+        'n_estimators': [50, 70],  
         'max_features': ['sqrt'],  
         'max_depth': [10, 12],  
         'min_samples_split': [2],  
@@ -131,8 +132,15 @@ with open(hyperparameters_file, 'w') as f:
 # Collect summary of performance metrics (Accuracy and MAE)
 summary = []
 
+# Set Pandas options to display the full width of the DataFrame
+pd.set_option('display.width', None)  # No limit on the width
+pd.set_option('display.max_columns', None)  # Show all columns
+pd.set_option('display.expand_frame_repr', False)  # Do not truncate long DataFrame display in console
+
 # Evaluate individual models first
 for model_name, clf in classifiers.items():
+    if model_name == 'Ensemble':
+        continue
     clf.fit(X_final, y)
     y_pred = clf.predict(X_final)
     
@@ -142,7 +150,14 @@ for model_name, clf in classifiers.items():
     # Calculate Accuracy
     accuracy = accuracy_score(y, y_pred)  # No multiplication by 100 (stays in decimal form)
     
-    print(f"MAE for {model_name}: {mae:.4f}, Accuracy: {accuracy:.4f}")
+    # Get confusion matrix and classification report
+    cm = confusion_matrix(y, y_pred)
+    cr = classification_report(y, y_pred)
+    
+    print(f"\nEvaluating {model_name}...")
+    print(f"Confusion Matrix for {model_name}:\n{cm}")
+    print(f"Classification Report for {model_name}:\n{cr}")
+    
     summary.append({
         'Model': model_name,
         'Mean Absolute Error (MAE)': mae,
@@ -150,8 +165,14 @@ for model_name, clf in classifiers.items():
     })
 
 # Now add the ensemble model to the summary
+clf_ensemble = classifiers['Ensemble']
+clf_ensemble.fit(X_final, y)
+y_pred_ensemble = clf_ensemble.predict(X_final)
 ensemble_mae = mean_absolute_error(y, y_pred_ensemble)
-ensemble_accuracy = accuracy_score(y, y_pred_ensemble)  # No multiplication by 100 (stays in decimal form)
+ensemble_accuracy = accuracy_score(y, y_pred_ensemble)
+ensemble_cm = confusion_matrix(y, y_pred_ensemble)
+ensemble_cr = classification_report(y, y_pred_ensemble)
+
 summary.append({
     'Model': 'Ensemble (VotingClassifier)',
     'Mean Absolute Error (MAE)': ensemble_mae,
@@ -160,6 +181,31 @@ summary.append({
 
 # Print out a summary table, sorted by MAE
 summary_df = pd.DataFrame(summary)
-summary_df = summary_df.sort_values(by='Mean Absolute Error (MAE)', ascending=True)  # Lower MAE is better
-print("\nSummary of Model Performance (Ranked by MAE):")
+
+# Calculate the standard deviation of MAE and accuracy between KFold splits
+for model_name, clf in classifiers.items():
+    if model_name == 'Ensemble':
+        continue
+    kf = KFold(n_splits=5, shuffle=True, random_state=44)
+    mae_scores = []
+    accuracy_scores = []
+    
+    for train_idx, test_idx in kf.split(X_final):
+        X_train, X_test = X_final[train_idx], X_final[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+        
+        mae_scores.append(mean_absolute_error(y_test, y_pred))
+        accuracy_scores.append(accuracy_score(y_test, y_pred))
+    
+    summary_df.loc[summary_df['Model'] == model_name, 'Std MAE'] = np.std(mae_scores)
+    summary_df.loc[summary_df['Model'] == model_name, 'Std Accuracy'] = np.std(accuracy_scores)
+
+# Sort by Mean Absolute Error (lower is better)
+summary_df = summary_df.sort_values(by='Mean Absolute Error (MAE)', ascending=True)
+
+# Print the full summary table
+print("\nSummary of Model Performance:")
 print(summary_df)
