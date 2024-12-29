@@ -30,7 +30,7 @@ X = X[numerical_vars]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=44)
 
 # Function to save hyperparameters to JSON file
-def save_hyperparameters(model_name, hyperparameters, filename='../data/ordinal/best_hyperparameters.json'):
+def save_hyperparameters(model_name, hyperparameters, filename='../data/ordinal/best_hyperparameters2.json'):
     try:
         with open(filename, 'r') as f:
             all_params = json.load(f)
@@ -43,7 +43,7 @@ def save_hyperparameters(model_name, hyperparameters, filename='../data/ordinal/
         json.dump(all_params, f, indent=4)
 
 # Function to load hyperparameters from JSON file
-def load_hyperparameters(model_name, filename='../data/ordinal/best_hyperparameters.json'):
+def load_hyperparameters(model_name, filename='../data/ordinal/best_hyperparameters2.json'):
     try:
         with open(filename, 'r') as f:
             all_params = json.load(f)
