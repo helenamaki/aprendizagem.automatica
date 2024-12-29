@@ -39,7 +39,6 @@ X_non_contains = X.drop(contains_columns, axis=1)
 pca = PCA(n_components=5)  # Use 5 components to speed up PCA
 X_contains_pca = pca.fit_transform(X_contains)
 
-
 # Print the amount of variance explained by the 5 components
 print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
 
@@ -158,6 +157,24 @@ for model_name, clf in classifiers.items():
     print(f"Confusion Matrix for {model_name}:\n{cm}")
     print(f"Classification Report for {model_name}:\n{cr}")
     
+    # Perform KFold cross-validation and store results
+    kf = KFold(n_splits=5, shuffle=True, random_state=44)
+    mae_scores = []
+    accuracy_scores = []
+    for train_idx, test_idx in kf.split(X_final):
+        X_train, X_test = X_final[train_idx], X_final[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+        
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+        
+        mae_scores.append(mean_absolute_error(y_test, y_pred))
+        accuracy_scores.append(accuracy_score(y_test, y_pred))
+    
+    print(f"KFold MAE scores for {model_name}: {mae_scores}")
+    print(f"KFold Accuracy scores for {model_name}: {accuracy_scores}")
+    
+    # Store results in the summary
     summary.append({
         'Model': model_name,
         'Mean Absolute Error (MAE)': mae,
@@ -173,6 +190,28 @@ ensemble_accuracy = accuracy_score(y, y_pred_ensemble)
 ensemble_cm = confusion_matrix(y, y_pred_ensemble)
 ensemble_cr = classification_report(y, y_pred_ensemble)
 
+print(f"\nEvaluating Ensemble (VotingClassifier)...")
+print(f"Confusion Matrix for Ensemble (VotingClassifier):\n{ensemble_cm}")
+print(f"Classification Report for Ensemble (VotingClassifier):\n{ensemble_cr}")
+
+# Perform KFold for the ensemble model
+kf_ensemble = KFold(n_splits=5, shuffle=True, random_state=44)
+ensemble_mae_scores = []
+ensemble_accuracy_scores = []
+for train_idx, test_idx in kf_ensemble.split(X_final):
+    X_train, X_test = X_final[train_idx], X_final[test_idx]
+    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+    
+    clf_ensemble.fit(X_train, y_train)
+    y_pred = clf_ensemble.predict(X_test)
+    
+    ensemble_mae_scores.append(mean_absolute_error(y_test, y_pred))
+    ensemble_accuracy_scores.append(accuracy_score(y_test, y_pred))
+
+print(f"KFold MAE scores for Ensemble (VotingClassifier): {ensemble_mae_scores}")
+print(f"KFold Accuracy scores for Ensemble (VotingClassifier): {ensemble_accuracy_scores}")
+
+# Store results for the ensemble model
 summary.append({
     'Model': 'Ensemble (VotingClassifier)',
     'Mean Absolute Error (MAE)': ensemble_mae,
@@ -181,27 +220,6 @@ summary.append({
 
 # Print out a summary table, sorted by MAE
 summary_df = pd.DataFrame(summary)
-
-# Calculate the standard deviation of MAE and accuracy between KFold splits
-for model_name, clf in classifiers.items():
-    if model_name == 'Ensemble':
-        continue
-    kf = KFold(n_splits=5, shuffle=True, random_state=44)
-    mae_scores = []
-    accuracy_scores = []
-    
-    for train_idx, test_idx in kf.split(X_final):
-        X_train, X_test = X_final[train_idx], X_final[test_idx]
-        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-        
-        clf.fit(X_train, y_train)
-        y_pred = clf.predict(X_test)
-        
-        mae_scores.append(mean_absolute_error(y_test, y_pred))
-        accuracy_scores.append(accuracy_score(y_test, y_pred))
-    
-    summary_df.loc[summary_df['Model'] == model_name, 'Std MAE'] = np.std(mae_scores)
-    summary_df.loc[summary_df['Model'] == model_name, 'Std Accuracy'] = np.std(accuracy_scores)
 
 # Sort by Mean Absolute Error (lower is better)
 summary_df = summary_df.sort_values(by='Mean Absolute Error (MAE)', ascending=True)
