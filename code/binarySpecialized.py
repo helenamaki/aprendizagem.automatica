@@ -9,7 +9,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
-import multiprocessing
 import os
 
 # Load dataset
@@ -18,9 +17,48 @@ df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 # Create the new binary target (1 for adoption, 0 for not adopted)
 df['AdoptionBinary'] = df['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
-# Load the list of numerical variables from the file
-with open('../data/numerical_vars.txt', 'r') as file:
-    numerical_vars = file.read().splitlines()
+# Function to save hyperparameters to JSON file
+def save_hyperparameters(model_name, hyperparameters, pet_type, filename='../data/'):
+    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
+    folder_path = os.path.join(filename, folder)
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(folder_path, exist_ok=True)
+
+    # Set the path for the JSON file
+    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
+    
+    # Load the existing data, if any
+    try:
+        with open(file_path, 'r') as f:
+            all_params = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        all_params = {}
+
+    # Add the hyperparameters for the current model
+    all_params[model_name] = hyperparameters
+    
+    # Save the updated hyperparameters to the file
+    with open(file_path, 'w') as f:
+        json.dump(all_params, f, indent=4)
+
+# Function to load hyperparameters from JSON file
+def load_hyperparameters(model_name, pet_type, filename='../data/'):
+    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
+    folder_path = os.path.join(filename, folder)
+    
+    # Set the path for the JSON file
+    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
+    
+    # Load the existing data, if any
+    try:
+        with open(file_path, 'r') as f:
+            all_params = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+    # Return the hyperparameters for the given model
+    return all_params.get(model_name, None)
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
@@ -70,70 +108,29 @@ param_grids = {
     }
 }
 
-# Function to save hyperparameters to JSON file
-def save_hyperparameters(model_name, hyperparameters, pet_type, filename='../data/'):
-    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
-    folder_path = os.path.join(filename, folder)
-    
-    # Create the directory if it doesn't exist
-    os.makedirs(folder_path, exist_ok=True)
-
-    # Set the path for the JSON file
-    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
-    
-    # Load the existing data, if any
-    try:
-        with open(file_path, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        all_params = {}
-
-    # Add the hyperparameters for the current model
-    all_params[model_name] = hyperparameters
-    
-    # Save the updated hyperparameters to the file
-    with open(file_path, 'w') as f:
-        json.dump(all_params, f, indent=4)
-
-# Function to load hyperparameters from JSON file
-def load_hyperparameters(model_name, pet_type, filename='../data/'):
-    folder = 'binaryDogs' if pet_type == 1 else 'binaryCats'
-    folder_path = os.path.join(filename, folder)
-    
-    # Set the path for the JSON file
-    file_path = os.path.join(folder_path, 'best_hyperparameters.json')
-    
-    # Load the existing data, if any
-    try:
-        with open(file_path, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-
-    # Return the hyperparameters for the given model
-    return all_params.get(model_name, None)
-
-# Filter dataset for dogs (Type = 1) and cats (Type = 2)
-df_dogs = df[df['Type'] == 1].copy()
-df_cats = df[df['Type'] == 2].copy()
+# Hyperparameter tuning flag
+retune_hyperparameters = True  # Change this flag to False to skip tuning
 
 # Function to prepare features and target
 def prepare_data(df_subset):
     # Prepare features (X) and target (y)
     X = df_subset.drop(['AdoptionSpeed', 'AdoptionBinary', 'Type'], axis=1)  # Drop 'Type' column as it's not a feature
-    X = pd.get_dummies(X, drop_first=True)  # One-hot encode categorical features
     y = df_subset['AdoptionBinary']
     
-    # Filter only the numerical variables that exist in X
-    numerical_vars = [col for col in numerical_vars if col in X.columns]
-    X = X[numerical_vars]
+    # Separate categorical and numerical columns
+    categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
+    numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
+
+    # Apply one-hot encoding to categorical variables
+    X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
+    X_numerical = X[numerical_vars]
     
+    # Combine numerical and categorical features back together
+    X = pd.concat([X_numerical, X_categorical], axis=1)
+
     return X, y
 
-# Hyperparameter tuning flag
-retune_hyperparameters = True  # Change this flag to False to skip tuning
-
-# Function to train and evaluate models for both dogs and cats
+# Function to evaluate models for a given pet type (dogs or cats)
 def evaluate_models(X, y, classifiers, param_grids, retune_hyperparameters, pet_type):
     results = {
         'Model': [],
@@ -204,10 +201,12 @@ def evaluate_models(X, y, classifiers, param_grids, retune_hyperparameters, pet_
 
 # Evaluate models for dogs
 print("\nEvaluating Models for Dogs:")
+df_dogs = df[df['Type'] == 1].copy()
 X_dogs, y_dogs = prepare_data(df_dogs)
 evaluate_models(X_dogs, y_dogs, classifiers, param_grids, retune_hyperparameters, pet_type=1)
 
 # Evaluate models for cats
 print("\nEvaluating Models for Cats:")
+df_cats = df[df['Type'] == 2].copy()
 X_cats, y_cats = prepare_data(df_cats)
 evaluate_models(X_cats, y_cats, classifiers, param_grids, retune_hyperparameters, pet_type=2)
