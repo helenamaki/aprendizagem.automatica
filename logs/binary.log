@@ -1,0 +1,170 @@
+Total variance explained by 5 components: 0.2240
+Loaded saved hyperparameters from file.
+
+Tuning hyperparameters for RandomForest...
+Best hyperparameters for RandomForest: {'bootstrap': True, 'max_depth': 15, 'max_features': 'sqrt', 'min_samples_leaf': 1, 'min_samples_split': 2, 'n_estimators': 100}
+
+Tuning hyperparameters for DecisionTree...
+Best hyperparameters for DecisionTree: {'criterion': 'gini', 'max_depth': 10, 'min_samples_leaf': 1, 'min_samples_split': 2}
+
+Tuning hyperparameters for LogisticRegression...
+Best hyperparameters for LogisticRegression: {'C': 1, 'max_iter': 100, 'solver': 'liblinear'}
+
+Tuning hyperparameters for KNeighbors...
+Best hyperparameters for KNeighbors: {'metric': 'euclidean', 'n_neighbors': 7, 'weights': 'uniform'}
+
+Tuning hyperparameters for SVC...
+Best hyperparameters for SVC: {'C': 1, 'gamma': 'auto', 'kernel': 'rbf'}
+Saved hyperparameters to ../data/binary/hyperparameters.json
+
+Evaluating RandomForest...
+Cross-Validation Accuracy Scores: [0.77192397 0.76792264 0.77292431 0.77318212 0.77051368]
+Mean Accuracy: 0.7713
+Standard Deviation: 0.0019
+Confusion Matrix for RandomForest:
+[[ 3184  1013]
+ [   27 10769]]
+Classification Report for RandomForest:
+              precision    recall  f1-score   support
+
+           0       0.99      0.76      0.86      4197
+           1       0.91      1.00      0.95     10796
+
+    accuracy                           0.93     14993
+   macro avg       0.95      0.88      0.91     14993
+weighted avg       0.94      0.93      0.93     14993
+
+
+Evaluating DecisionTree...
+Cross-Validation Accuracy Scores: [0.73057686 0.74124708 0.73624542 0.74049366 0.73849233]
+Mean Accuracy: 0.7374
+Standard Deviation: 0.0038
+Confusion Matrix for DecisionTree:
+[[2394 1803]
+ [ 884 9912]]
+Classification Report for DecisionTree:
+              precision    recall  f1-score   support
+
+           0       0.73      0.57      0.64      4197
+           1       0.85      0.92      0.88     10796
+
+    accuracy                           0.82     14993
+   macro avg       0.79      0.74      0.76     14993
+weighted avg       0.81      0.82      0.81     14993
+
+
+Evaluating LogisticRegression...
+Cross-Validation Accuracy Scores: [0.72757586 0.72557519 0.72757586 0.73282188 0.73749166]
+Mean Accuracy: 0.7302
+Standard Deviation: 0.0044
+Confusion Matrix for LogisticRegression:
+[[  599  3598]
+ [  408 10388]]
+Classification Report for LogisticRegression:
+              precision    recall  f1-score   support
+
+           0       0.59      0.14      0.23      4197
+           1       0.74      0.96      0.84     10796
+
+    accuracy                           0.73     14993
+   macro avg       0.67      0.55      0.53     14993
+weighted avg       0.70      0.73      0.67     14993
+
+
+Evaluating NaiveBayes...
+Cross-Validation Accuracy Scores: [0.7009003  0.69456485 0.69023008 0.6897932  0.69946631]
+Mean Accuracy: 0.6950
+Standard Deviation: 0.0046
+Confusion Matrix for NaiveBayes:
+[[ 905 3292]
+ [1216 9580]]
+Classification Report for NaiveBayes:
+              precision    recall  f1-score   support
+
+           0       0.43      0.22      0.29      4197
+           1       0.74      0.89      0.81     10796
+
+    accuracy                           0.70     14993
+   macro avg       0.59      0.55      0.55     14993
+weighted avg       0.66      0.70      0.66     14993
+
+
+Evaluating KNeighbors...
+Cross-Validation Accuracy Scores: [0.74691564 0.73924642 0.74858286 0.74149433 0.74049366]
+Mean Accuracy: 0.7433
+Standard Deviation: 0.0037
+Confusion Matrix for KNeighbors:
+[[2220 1977]
+ [ 931 9865]]
+Classification Report for KNeighbors:
+              precision    recall  f1-score   support
+
+           0       0.70      0.53      0.60      4197
+           1       0.83      0.91      0.87     10796
+
+    accuracy                           0.81     14993
+   macro avg       0.77      0.72      0.74     14993
+weighted avg       0.80      0.81      0.80     14993
+
+
+Evaluating SVC...
+Cross-Validation Accuracy Scores: [0.76092031 0.75625208 0.76192064 0.76317545 0.75783856]
+Mean Accuracy: 0.7600
+Standard Deviation: 0.0026
+Confusion Matrix for SVC:
+[[ 2496  1701]
+ [  455 10341]]
+Classification Report for SVC:
+              precision    recall  f1-score   support
+
+           0       0.85      0.59      0.70      4197
+           1       0.86      0.96      0.91     10796
+
+    accuracy                           0.86     14993
+   macro avg       0.85      0.78      0.80     14993
+weighted avg       0.86      0.86      0.85     14993
+
+
+Evaluating Ensemble...
+Cross-Validation Accuracy Scores: [0.76692231 0.76425475 0.77092364 0.76951301 0.76517678]
+Mean Accuracy: 0.7674
+Standard Deviation: 0.0025
+Confusion Matrix for Ensemble:
+[[ 3180  1017]
+ [  166 10630]]
+Classification Report for Ensemble:
+              precision    recall  f1-score   support
+
+           0       0.95      0.76      0.84      4197
+           1       0.91      0.98      0.95     10796
+
+    accuracy                           0.92     14993
+   macro avg       0.93      0.87      0.90     14993
+weighted avg       0.92      0.92      0.92     14993
+
+Confusion Matrix for Ensemble:
+[[ 3180  1017]
+ [  166 10630]]
+Classification Report for Ensemble:
+              precision    recall  f1-score   support
+
+           0       0.95      0.76      0.84      4197
+           1       0.91      0.98      0.95     10796
+
+    accuracy                           0.92     14993
+   macro avg       0.93      0.87      0.90     14993
+weighted avg       0.92      0.92      0.92     14993
+
+
+Summary of Model Performance:
+
+                Model  Mean Accuracy  Std Accuracy
+0        RandomForest       0.771293      0.001928
+6            Ensemble       0.767358      0.002527
+5                 SVC       0.760021      0.002582
+4          KNeighbors       0.743347      0.003702
+1        DecisionTree       0.737411      0.003833
+2  LogisticRegression       0.730208      0.004364
+3          NaiveBayes       0.694991      0.004579
+This is a logged informational message.
+ls: cannot access 'non_existent_file': No such file or directory
