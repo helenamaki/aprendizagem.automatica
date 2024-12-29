@@ -18,17 +18,22 @@ df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 df['AdoptionBinary'] = df['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
 # Prepare features (X) and target (y)
+# Drop the target columns from the features
 X = df.drop(['AdoptionSpeed', 'AdoptionBinary'], axis=1)
-X = pd.get_dummies(X, drop_first=True)  # One-hot encode categorical features
+
+# Separate categorical and numerical features
+categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
+numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
+
+# Apply one-hot encoding to categorical variables and keep the numerical ones as is
+X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
+X_numerical = X[numerical_vars]
+
+# Combine numerical and categorical features back together
+X = pd.concat([X_numerical, X_categorical], axis=1)
+
+# Set the target variable
 y = df['AdoptionBinary']
-
-# Load the list of numerical variables from the file
-with open('../data/numerical_vars.txt', 'r') as file:
-    numerical_vars = file.read().splitlines()
-
-# Filter only the numerical variables that exist in X
-numerical_vars = [col for col in numerical_vars if col in X.columns]
-X = X[numerical_vars]
 
 # Function to save hyperparameters to JSON file
 def save_hyperparameters(model_name, hyperparameters, filename='../data/binary/best_hyperparameters.json'):
