@@ -50,7 +50,7 @@ X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=100),  # Increase depth & estimators
+    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50),  # Increase depth & estimators
     'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15),  # Increase depth
     'LogisticRegression': LogisticRegression(random_state=44, max_iter=100),  # Keep it simple
     'NaiveBayes': GaussianNB(),  # NaiveBayes is already fast
@@ -66,7 +66,7 @@ classifiers = {
 # Define parameter grids for tuning (with slightly increased values)
 param_grids = {
     'RandomForest': {
-        'n_estimators': [100, 150],  # Increased number of estimators for a better model
+        'n_estimators': [50, 100],  # Increased number of estimators for a better model
         'max_features': ['sqrt'],  # Keep the number of features low
         'max_depth': [10, 15],  # Increased depth slightly
         'min_samples_split': [2],  # Keep the split simple
@@ -74,7 +74,7 @@ param_grids = {
         'bootstrap': [True]
     },
     'DecisionTree': {
-        'max_depth': [10, 15],  # Increased depth slightly
+        'max_depth': [10, 12],  # Increased depth slightly
         'min_samples_split': [2],
         'min_samples_leaf': [1],
         'criterion': ['gini', 'entropy']
