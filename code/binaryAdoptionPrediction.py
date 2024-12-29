@@ -69,7 +69,7 @@ classifiers = {
 # Define parameter grids for tuning
 param_grids = {
     'RandomForest': {
-        'n_estimators': [100, 200],  # Reduced options for faster tuning
+        'n_estimators': [30, 60],  # Reduced options for faster tuning
         'max_features': ['sqrt'],  # Fixed the issue with 'auto'
         'max_depth': [10, 20, 30],  # Allow depth up to 30
         'min_samples_split': [2],
