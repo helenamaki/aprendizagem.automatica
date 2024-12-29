@@ -11,7 +11,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import multiprocessing
 
 # Load dataset
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
@@ -31,97 +30,72 @@ numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
 X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
 X_numerical = X[numerical_vars]
 
-# Apply PCA to the .contains columns
-X_contains = X_categorical.filter(regex='.*\.contains$')
-
-# Scale the data before PCA
-scaler = StandardScaler()
-X_contains_scaled = scaler.fit_transform(X_contains)
-
-# Apply PCA with 5 components
-pca = PCA(n_components=5)
-X_contains_pca = pca.fit_transform(X_contains_scaled)
-
-# Print the amount of variance explained by the 5 components
-print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
-
-# Combine the PCA-transformed .contains columns with the rest of the dataset
-X_numerical = X_numerical.reset_index(drop=True)
-X_categorical = X_categorical.drop(X_contains.columns, axis=1).reset_index(drop=True)
-
-X = pd.concat([X_numerical, X_categorical, pd.DataFrame(X_contains_pca)], axis=1)
+# Combine numerical and categorical features back together
+X = pd.concat([X_numerical, X_categorical], axis=1)
 
 # Set the target variable
 y = df['AdoptionBinary']
 
-# Function to save hyperparameters to JSON file
-def save_hyperparameters(model_name, hyperparameters, filename='../data/binary/best_hyperparameters.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        all_params = {}
-    
-    all_params[model_name] = hyperparameters
-    
-    with open(filename, 'w') as f:
-        json.dump(all_params, f, indent=4)
+# Perform PCA on the .contains columns
+contains_columns = [col for col in X.columns if col.endswith('.contains')]
+X_contains = X[contains_columns]
+X_non_contains = X.drop(contains_columns, axis=1)
 
-# Function to load hyperparameters from JSON file
-def load_hyperparameters(model_name, filename='../data/binary/best_hyperparameters.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-    
-    return all_params.get(model_name, None)
+# Apply PCA to the .contains columns
+pca = PCA(n_components=5)
+X_contains_pca = pca.fit_transform(X_contains)
+
+# Print the amount of variance explained by 5 components
+print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
+
+# Combine PCA results with the non-.contains columns
+X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44),
-    'DecisionTree': DecisionTreeClassifier(random_state=44),
-    'LogisticRegression': LogisticRegression(random_state=44),
+    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1),  # Added n_jobs=-1 for parallelization
+    'DecisionTree': DecisionTreeClassifier(random_state=44),  # n_jobs=-1 doesn't apply directly here
+    'LogisticRegression': LogisticRegression(random_state=44, n_jobs=-1),  # Added n_jobs=-1 for parallelization
     'NaiveBayes': GaussianNB(),
-    'KNeighbors': KNeighborsClassifier(),
-    'SVC': SVC(C=1, gamma="auto", kernel="rbf"),  # SVC with fixed hyperparameters
+    'KNeighbors': KNeighborsClassifier(n_jobs=-1),  # Added n_jobs=-1 for parallelization
+    'SVC': SVC(C=1, gamma="auto"),  # No grid search yet, just using these parameters
     'Ensemble': VotingClassifier(estimators=[
-        ('rf', RandomForestClassifier(random_state=44)),
+        ('rf', RandomForestClassifier(random_state=44, n_jobs=-1)),  # Added n_jobs=-1 for parallelization
         ('dt', DecisionTreeClassifier(random_state=44)),
-        ('knn', KNeighborsClassifier())
+        ('knn', KNeighborsClassifier(n_jobs=-1))  # Added n_jobs=-1 for parallelization
     ], voting='hard')
 }
 
 # Define parameter grids for tuning
 param_grids = {
     'RandomForest': {
-        'n_estimators': [100, 200, 500],
-        'max_features': ['sqrt', 'log2'],
-        'max_depth': [10, 20, 30],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
-        'bootstrap': [True, False]
+        'n_estimators': [100, 200],  # Reduced options for faster tuning
+        'max_features': ['sqrt'],  # Fixed the issue with 'auto'
+        'max_depth': [10, 20, 30],  # Allow depth up to 30
+        'min_samples_split': [2],
+        'min_samples_leaf': [1],
+        'bootstrap': [True]
     },
     'DecisionTree': {
-        'max_depth': [10, 20, 30],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
-        'criterion': ['gini', 'entropy']
+        'max_depth': [10, 20, 30],  # Allow depth up to 30
+        'min_samples_split': [2],
+        'min_samples_leaf': [1],
+        'criterion': ['gini']
     },
     'LogisticRegression': {
-        'C': [0.1, 1, 10],
-        'solver': ['liblinear', 'saga'],
-        'max_iter': [100, 200]
+        'C': [0.1, 1],
+        'solver': ['liblinear'],  # Use liblinear for smaller datasets
+        'max_iter': [100]
     },
     'KNeighbors': {
-        'n_neighbors': [3, 5, 10],
-        'weights': ['uniform', 'distance'],
-        'metric': ['euclidean', 'manhattan']
+        'n_neighbors': [3, 5],
+        'weights': ['uniform'],
+        'metric': ['euclidean']
     },
     'SVC': {
-        'C': [1],
-        'gamma': ['auto'],
-        'kernel': ['rbf', 'linear', 'poly']  # Stick to simpler kernel
+        'C': [1],  # Fixed C value
+        'gamma': ['auto'],  # Auto gamma setting for SVC
+        'kernel': ['rbf', 'linear', 'poly']  # Testing all three kernels
     }
 }
 
@@ -130,46 +104,35 @@ retune_hyperparameters = True  # Change this flag to False to skip tuning
 
 # Perform hyperparameter tuning (GridSearchCV) if necessary
 for model_name, clf in classifiers.items():
-    if model_name == "NaiveBayes" or model_name == "Ensemble" or model_name == "SVC":
+    if model_name == "NaiveBayes" or model_name == "Ensemble":
         continue
     # Check if we need to retune
     if retune_hyperparameters:
         print(f"\nTuning hyperparameters for {model_name}...")
 
-        # Check if hyperparameters are already saved
-        best_params = load_hyperparameters(model_name)
+        # Set up GridSearchCV for the current model with parallelization
+        grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+        grid_search.fit(X_final, y)
 
-        if best_params is None:
-            print(f"No saved hyperparameters found for {model_name}, starting grid search...")
+        # Get the best parameters and model
+        best_params = grid_search.best_params_
 
-            # Set up GridSearchCV for the current model with parallelization
-            grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-            grid_search.fit(X, y)
-
-            # Get the best parameters and model
-            best_params = grid_search.best_params_
-
-            # Save the best hyperparameters
-            save_hyperparameters(model_name, best_params)
-            print(f"Best hyperparameters for {model_name}: {best_params}")
-        else:
-            print(f"Using saved hyperparameters for {model_name}: {best_params}")
-        
         # Create the model with the best parameters
         clf.set_params(**best_params)
+        print(f"Best hyperparameters for {model_name}: {best_params}")
     else:
         print(f"Skipping tuning for {model_name}, using default parameters.")
     
     # Perform cross-validation with parallelization
     print(f"\nEvaluating {model_name}...")
-    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+    cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
     print(f"Cross-Validation Accuracy Scores: {cv_results}")
     print(f"Mean Accuracy: {cv_results.mean():.4f}")
     print(f"Standard Deviation: {cv_results.std():.4f}")
     
     # Fit the model and predict
-    clf.fit(X, y)
-    y_pred = clf.predict(X)
+    clf.fit(X_final, y)
+    y_pred = clf.predict(X_final)
     
     # Confusion Matrix
     cm = confusion_matrix(y, y_pred)
@@ -181,8 +144,8 @@ for model_name, clf in classifiers.items():
 
 # Example of evaluating ensemble (VotingClassifier)
 ensemble_clf = classifiers['Ensemble']
-ensemble_clf.fit(X, y)
-y_pred_ensemble = ensemble_clf.predict(X)
+ensemble_clf.fit(X_final, y)
+y_pred_ensemble = ensemble_clf.predict(X_final)
 
 # Confusion Matrix for Ensemble
 cm_ensemble = confusion_matrix(y, y_pred_ensemble)
@@ -201,7 +164,7 @@ results = {
 
 # Cross-validation results and performance summary
 for model_name, clf in classifiers.items():
-    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+    cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
     results['Model'].append(model_name)
     results['Mean Accuracy'].append(cv_results.mean())
     results['Std Accuracy'].append(cv_results.std())
