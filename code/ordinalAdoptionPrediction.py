@@ -68,41 +68,28 @@ df['AdoptionOrdinal'] = df['AdoptionSpeed']  # Use 0 to 4 as is
 
 # Prepare features (X) and target (y)
 X = df.drop(['AdoptionSpeed', 'AdoptionOrdinal'], axis=1)
-X = pd.get_dummies(X, drop_first=True)  # One-hot encode categorical features
 y = df['AdoptionOrdinal']
+
+# Separate categorical and numerical features
+categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
+numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
+
+# Apply one-hot encoding to categorical variables and keep the numerical ones as is
+X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
+X_numerical = X[numerical_vars]
+
+# Combine numerical and categorical features back together
+X = pd.concat([X_numerical, X_categorical], axis=1)
 
 # Load the list of numerical variables from the file
 with open('../data/numerical_vars.txt', 'r') as file:
-    numerical_vars = file.read().splitlines()
+    numerical_vars_from_file = file.read().splitlines()
 
-# Filter only the numerical variables that exist in X
-numerical_vars = [col for col in numerical_vars if col in X.columns]
-X = X[numerical_vars]
+# Filter only the numerical variables that exist in X (so that they match correctly)
+numerical_vars_from_file = [col for col in numerical_vars_from_file if col in X.columns]
 
-# Identify all .contains columns
-contains_columns = [col for col in X.columns if col.endswith('.contains')]
-
-# Step 1: Train Random Forest to evaluate feature importance (only for the .contains columns)
-rf = RandomForestClassifier(random_state=44, n_jobs=-1)
-rf.fit(X[contains_columns], y)
-
-# Step 2: Get feature importance and sort
-feature_importances = rf.feature_importances_
-
-# Step 3: Create a DataFrame for feature importance and sort it
-importance_df = pd.DataFrame({
-    'Feature': contains_columns,
-    'Importance': feature_importances
-})
-importance_df = importance_df.sort_values(by='Importance', ascending=False)
-
-# Reduce columns for SVC to include top 50 .contains columns and all other columns
-contains_columns = [col for col in X.columns if '.contains' in col]
-top_50_contains_columns = contains_columns[:50]  # Choose top 50 columns
-remaining_columns = [col for col in X.columns if '.contains' not in col]  # Other columns
-
-# Create the final feature set for SVC (top 50 .contains columns + all other columns)
-X_svc = X[top_50_contains_columns + remaining_columns]
+# Keep only the numerical columns that are present in both X and the file
+X = X[numerical_vars_from_file + X_categorical.columns.tolist()]  # Add both numerical and categorical columns
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
