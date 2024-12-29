@@ -1,74 +1,23 @@
-import os
-import json
 import pandas as pd
 import numpy as np
+import json
 from sklearn.model_selection import KFold, cross_val_score, GridSearchCV
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, cohen_kappa_score
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_absolute_error
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
-
-# Directory for ordinal data
-ordinal_dir = '../data/ordinal/'
-os.makedirs(ordinal_dir, exist_ok=True)
-
-# Functions for saving/loading hyperparameters and metrics
-def save_hyperparameters(model_name, hyperparameters, filename=f'{ordinal_dir}best_hyperparameters.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        all_params = {}
-    
-    all_params[model_name] = hyperparameters
-    
-    with open(filename, 'w') as f:
-        json.dump(all_params, f, indent=4)
-    print(f"Hyperparameters for {model_name} saved to {filename}")
-
-def load_hyperparameters(model_name, filename=f'{ordinal_dir}best_hyperparameters.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_params = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return None
-    
-    return all_params.get(model_name, None)
-
-def save_metrics(metrics, filename=f'{ordinal_dir}model_metrics.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_metrics = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        all_metrics = {}
-    
-    all_metrics.update(metrics)
-    
-    with open(filename, 'w') as f:
-        json.dump(all_metrics, f, indent=4)
-    print(f"Metrics saved to {filename}")
-
-def load_metrics(filename=f'{ordinal_dir}model_metrics.json'):
-    try:
-        with open(filename, 'r') as f:
-            all_metrics = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-    
-    return all_metrics
+from sklearn.decomposition import PCA
+import os
 
 # Load dataset
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 
-# Create ordinal target
-df['AdoptionOrdinal'] = df['AdoptionSpeed']  # Use 0 to 4 as is
-
 # Prepare features (X) and target (y)
-X = df.drop(['AdoptionSpeed', 'AdoptionOrdinal'], axis=1)
-y = df['AdoptionOrdinal']
+X = df.drop(['AdoptionSpeed'], axis=1)  # No need for AdoptionBinary anymore
+y = df['AdoptionSpeed']
 
 # Separate categorical and numerical features
 categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
@@ -81,121 +30,136 @@ X_numerical = X[numerical_vars]
 # Combine numerical and categorical features back together
 X = pd.concat([X_numerical, X_categorical], axis=1)
 
-# Load the list of numerical variables from the file
-with open('../data/numerical_vars.txt', 'r') as file:
-    numerical_vars_from_file = file.read().splitlines()
+# Perform PCA on the .contains columns
+contains_columns = [col for col in X.columns if col.endswith('.contains')]
+X_contains = X[contains_columns]
+X_non_contains = X.drop(contains_columns, axis=1)
 
-# Filter only the numerical variables that exist in X (so that they match correctly)
-numerical_vars_from_file = [col for col in numerical_vars_from_file if col in X.columns]
+# Apply PCA with fewer components for faster computation
+pca = PCA(n_components=5)  # Use 5 components to speed up PCA
+X_contains_pca = pca.fit_transform(X_contains)
 
-# Keep only the numerical columns that are present in both X and the file
-X = X[numerical_vars_from_file + X_categorical.columns.tolist()]  # Add both numerical and categorical columns
+# Print the amount of variance explained by the 5 components
+print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
 
-# Define classifiers and parameter grids for tuning
+# Combine PCA results with the non-.contains columns
+X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
+
+# Define classifiers
 classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44),
-    'DecisionTree': DecisionTreeClassifier(random_state=44),
-    'LogisticRegression': LogisticRegression(random_state=44, max_iter=1000),
-    'NaiveBayes': GaussianNB(),
-    'KNeighbors': KNeighborsClassifier(),
-    'SVC': SVC(random_state=44, probability=True, gamma='scale'),  # Use 'scale' for gamma
+    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=50), 
+    'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15), 
+    'LogisticRegression': LogisticRegression(random_state=44, max_iter=100), 
+    'NaiveBayes': GaussianNB(),  
+    'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7), 
+    'SVC': SVC(),  
     'Ensemble': VotingClassifier(estimators=[
-        ('rf', RandomForestClassifier(random_state=44, n_estimators=200, max_depth=20, min_samples_split=5, min_samples_leaf=2)),
-        ('lr', LogisticRegression(random_state=44, max_iter=1000, C=1, solver='liblinear')),
-        ('svc', SVC(random_state=44, probability=True, kernel='rbf', C=1, gamma='auto'))
-    ], voting='soft')
+        ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=100)),
+        ('dt', DecisionTreeClassifier(random_state=44, max_depth=15)),
+        ('knn', KNeighborsClassifier(n_jobs=-1, n_neighbors=7))
+    ], voting='hard')
 }
 
+# Define parameter grids for tuning (with slightly increased values)
 param_grids = {
     'RandomForest': {
-        'n_estimators': [100, 200, 500],
-        'max_features': ['auto', 'sqrt', 'log2'],
-        'max_depth': [None, 10, 20],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
-        'bootstrap': [True, False]
+        'n_estimators': [50, 80],  
+        'max_features': ['sqrt'],  
+        'max_depth': [10, 12],  
+        'min_samples_split': [2],  
+        'min_samples_leaf': [1],  
+        'bootstrap': [True]
     },
     'DecisionTree': {
-        'max_depth': [None, 10, 20],
-        'min_samples_split': [2, 5],
-        'min_samples_leaf': [1, 2],
+        'max_depth': [10, 12],  
+        'min_samples_split': [2],
+        'min_samples_leaf': [1],
         'criterion': ['gini', 'entropy']
     },
     'LogisticRegression': {
-        'C': [0.1, 1, 10],
-        'solver': ['liblinear', 'saga']
+        'C': [0.1, 1],  
+        'solver': ['liblinear'],  
+        'max_iter': [100]  
     },
     'KNeighbors': {
-        'n_neighbors': [3, 5, 10],
-        'weights': ['uniform', 'distance'],
-        'metric': ['euclidean', 'manhattan']
+        'n_neighbors': [5, 7],  
+        'weights': ['uniform'],
+        'metric': ['euclidean']  
     },
     'SVC': {
-        'C': [0.1, 1, 10],
-        'gamma': ['scale', 'auto'],
-        'kernel': ['linear', 'rbf', 'poly']
+        'C': [0.1, 1, 10],  
+        'gamma': ['auto'],  
+        'kernel': ['rbf']  
     }
 }
+
+# File path for saving/loading hyperparameters
+hyperparameters_file = '../data/ordinal/hyperparameters.json'
+
+# Load hyperparameters from JSON if they exist
+if os.path.exists(hyperparameters_file):
+    with open(hyperparameters_file, 'r') as f:
+        saved_hyperparameters = json.load(f)
+    print("Loaded saved hyperparameters from file.")
+else:
+    saved_hyperparameters = {}
 
 # Hyperparameter tuning flag
 retune_hyperparameters = True  # Change this flag to False to skip tuning
 
-# Results dictionary for summary
-results = {
-    'Model': [],
-    'Mean Accuracy': [],
-    'MSE': [],
-    'Quadratic Weighted Kappa': []
-}
-
-# Train and evaluate models
+# Perform hyperparameter tuning (GridSearchCV) if necessary
 for model_name, clf in classifiers.items():
-    if model_name == "NaiveBayes":
-        print(f"\nSkipping hyperparameter tuning for {model_name}")
+    if model_name == "NaiveBayes" or model_name == "Ensemble":
         continue
-    
-    # Hyperparameter tuning for models other than SVC
-    if model_name != 'SVC' and retune_hyperparameters and model_name in param_grids:
+    if model_name in saved_hyperparameters and not retune_hyperparameters:
+        print(f"Using saved hyperparameters for {model_name}.")
+        clf.set_params(**saved_hyperparameters[model_name])
+    else:
         print(f"\nTuning hyperparameters for {model_name}...")
-        best_params = load_hyperparameters(model_name)
-        
-        if best_params is None:
-            print(f"No saved hyperparameters found for {model_name}, starting grid search...")
-            grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)
-            grid_search.fit(X, y)
-            best_params = grid_search.best_params_
-            save_hyperparameters(model_name, best_params)
-        else:
-            print(f"Using saved hyperparameters for {model_name}: {best_params}")
-        
+        grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  
+        grid_search.fit(X_final, y)
+        best_params = grid_search.best_params_
+        saved_hyperparameters[model_name] = best_params
         clf.set_params(**best_params)
+        print(f"Best hyperparameters for {model_name}: {best_params}")
+
+# Save hyperparameters to JSON file after tuning
+with open(hyperparameters_file, 'w') as f:
+    json.dump(saved_hyperparameters, f, indent=4)
+    print(f"Saved hyperparameters to {hyperparameters_file}")
+
+# Collect summary of performance metrics (Accuracy and MAE)
+summary = []
+
+# Evaluate individual models first
+for model_name, clf in classifiers.items():
+    clf.fit(X_final, y)
+    y_pred = clf.predict(X_final)
     
-    # Cross-validation and evaluation
-    print(f"\nEvaluating {model_name}...")
-    clf.fit(X, y)
-    y_pred = clf.predict(X)
+    # Calculate MAE
+    mae = mean_absolute_error(y, y_pred)
+    
+    # Calculate Accuracy
+    accuracy = accuracy_score(y, y_pred)  # No multiplication by 100 (stays in decimal form)
+    
+    print(f"MAE for {model_name}: {mae:.4f}, Accuracy: {accuracy:.4f}")
+    summary.append({
+        'Model': model_name,
+        'Mean Absolute Error (MAE)': mae,
+        'Accuracy': accuracy
+    })
 
-    # Metrics
-    mse = mean_squared_error(y, y_pred)
-    qwk = cohen_kappa_score(y, y_pred, weights='quadratic')
-    cv_accuracy = cross_val_score(clf, X, y, cv=5, scoring='accuracy').mean()
+# Now add the ensemble model to the summary
+ensemble_mae = mean_absolute_error(y, y_pred_ensemble)
+ensemble_accuracy = accuracy_score(y, y_pred_ensemble)  # No multiplication by 100 (stays in decimal form)
+summary.append({
+    'Model': 'Ensemble (VotingClassifier)',
+    'Mean Absolute Error (MAE)': ensemble_mae,
+    'Accuracy': ensemble_accuracy
+})
 
-    print(f"Confusion Matrix for {model_name}:\n{confusion_matrix(y, y_pred)}")
-    print(f"Classification Report for {model_name}:\n{classification_report(y, y_pred)}")
-    print(f"Mean Accuracy: {cv_accuracy:.4f}")
-    print(f"MSE: {mse:.4f}")
-    print(f"Quadratic Weighted Kappa: {qwk:.4f}")
-
-    # Save results
-    results['Model'].append(model_name)
-    results['Mean Accuracy'].append(cv_accuracy)
-    results['MSE'].append(mse)
-    results['Quadratic Weighted Kappa'].append(qwk)
-
-# Save results to JSON
-save_metrics(results)
-
-# Convert results to DataFrame for display
-summary_df = pd.DataFrame(results).sort_values(by='Quadratic Weighted Kappa', ascending=False)
-print("\nSummary of Model Performance:\n")
+# Print out a summary table, sorted by MAE
+summary_df = pd.DataFrame(summary)
+summary_df = summary_df.sort_values(by='Mean Absolute Error (MAE)', ascending=True)  # Lower MAE is better
+print("\nSummary of Model Performance (Ranked by MAE):")
 print(summary_df)
