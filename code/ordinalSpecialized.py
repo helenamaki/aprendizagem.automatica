@@ -124,7 +124,7 @@ def save_hyperparameters(saved_hyperparameters, file_path):
     print(f"Saved hyperparameters to {file_path}")
 
 # Hyperparameter tuning flag
-retune_hyperparameters = True  # Change this flag to False to skip tuning
+retune_hyperparameters = False  # Change this flag to False to skip tuning
 
 # Function to evaluate models
 def evaluate_models(X, y, classifiers, param_grids, hyperparameters_file):
