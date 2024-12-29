@@ -26,6 +26,14 @@ with open('../data/numerical_vars.txt', 'r') as file:
 numerical_vars = [col for col in numerical_vars if col in X.columns]
 X = X[numerical_vars]
 
+# Reduce columns for SVC to include top 50 .contains columns and all other columns
+contains_columns = [col for col in X.columns if '.contains' in col]
+top_50_contains_columns = contains_columns[:50]  # Choose top 50 columns
+remaining_columns = [col for col in X.columns if '.contains' not in col]  # Other columns
+
+# Create the final feature set for SVC (top 50 .contains columns + all other columns)
+X_svc = X[top_50_contains_columns + remaining_columns]
+
 # Split dataset
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=44)
 
@@ -69,9 +77,9 @@ classifiers = {
     'SVC': SVC(random_state=44),
     'Ensemble': VotingClassifier(estimators=[
         ('rf', RandomForestClassifier(random_state=44)),
-        ('dt', DecisionTreeClassifier(random_state=44)),
-        ('knn', KNeighborsClassifier())
-    ], voting='hard')
+        ('lr', LogisticRegression(random_state=44)),
+        ('svc', SVC(random_state=44))
+    ], voting='soft')
 }
 
 param_grids = {
@@ -101,7 +109,7 @@ param_grids = {
     },
     'SVC': {
         'C': [0.1, 1],
-        'kernel': ['linear', 'rbf'],
+        'kernel': ['linear', 'rbf', 'poly'],
         'gamma': ['scale', 'auto']
     }
 }
@@ -129,7 +137,12 @@ for model_name, clf in classifiers.items():
             refit='qwk',  # Optimize for QWK
             cv=5, n_jobs=-1
         )
-        grid_search.fit(X_train, y_train)
+        
+        if model_name == 'SVC':
+            grid_search.fit(X_svc, y_train)  # For SVC, use reduced columns (top 50 .contains + all other columns)
+        else:
+            grid_search.fit(X_train, y_train)
+        
         best_params = grid_search.best_params_
         save_hyperparameters(model_name, best_params)
         print(f"Best hyperparameters for {model_name}: {best_params}")
@@ -139,7 +152,11 @@ for model_name, clf in classifiers.items():
 
     # Evaluate with cross-validation
     print(f"\nEvaluating {model_name}...")
-    cv_results_accuracy = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)
+    if model_name == 'SVC':
+        cv_results_accuracy = cross_val_score(clf, X_svc, y, cv=5, scoring='accuracy', n_jobs=-1)  # For SVC, use reduced columns
+    else:
+        cv_results_accuracy = cross_val_score(clf, X_train, y, cv=5, scoring='accuracy', n_jobs=-1)
+    
     cv_results_mse = cross_val_score(clf, X, y, cv=5, scoring=mse_scorer, n_jobs=-1)
     cv_results_qwk = cross_val_score(clf, X, y, cv=5, scoring=qwk_scorer, n_jobs=-1)
 
