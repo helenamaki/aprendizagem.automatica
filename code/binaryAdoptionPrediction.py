@@ -10,7 +10,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
+import os
 
 # Load dataset
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
@@ -19,8 +19,8 @@ df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 df['AdoptionBinary'] = df['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
 # Prepare features (X) and target (y)
-# Drop the target columns from the features
 X = df.drop(['AdoptionSpeed', 'AdoptionBinary'], axis=1)
+y = df['AdoptionBinary']
 
 # Separate categorical and numerical features
 categorical_vars = X.select_dtypes(include=['object']).columns.tolist()
@@ -33,19 +33,16 @@ X_numerical = X[numerical_vars]
 # Combine numerical and categorical features back together
 X = pd.concat([X_numerical, X_categorical], axis=1)
 
-# Set the target variable
-y = df['AdoptionBinary']
-
 # Perform PCA on the .contains columns
 contains_columns = [col for col in X.columns if col.endswith('.contains')]
 X_contains = X[contains_columns]
 X_non_contains = X.drop(contains_columns, axis=1)
 
-# Apply PCA to the .contains columns
-pca = PCA(n_components=5)
+# Apply PCA with fewer components for faster computation
+pca = PCA(n_components=5)  # Use 5 components to speed up PCA
 X_contains_pca = pca.fit_transform(X_contains)
 
-# Print the amount of variance explained by 5 components
+# Print the amount of variance explained by the 5 components
 print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
 
 # Combine PCA results with the non-.contains columns
@@ -53,51 +50,62 @@ X_final = np.concatenate([X_non_contains, X_contains_pca], axis=1)
 
 # Define classifiers and parameter grids for tuning
 classifiers = {
-    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1),  # Added n_jobs=-1 for parallelization
-    'DecisionTree': DecisionTreeClassifier(random_state=44),  # n_jobs=-1 doesn't apply directly here
-    'LogisticRegression': LogisticRegression(random_state=44, n_jobs=-1),  # Added n_jobs=-1 for parallelization
-    'NaiveBayes': GaussianNB(),
-    'KNeighbors': KNeighborsClassifier(n_jobs=-1),  # Added n_jobs=-1 for parallelization
-    'SVC': SVC(C=1, gamma="auto"),  # No grid search yet, just using these parameters
+    'RandomForest': RandomForestClassifier(random_state=44, n_jobs=-1, max_depth=15, n_estimators=100),  # Increase depth & estimators
+    'DecisionTree': DecisionTreeClassifier(random_state=44, max_depth=15),  # Increase depth
+    'LogisticRegression': LogisticRegression(random_state=44, max_iter=100),  # Keep it simple
+    'NaiveBayes': GaussianNB(),  # NaiveBayes is already fast
+    'KNeighbors': KNeighborsClassifier(n_jobs=-1, n_neighbors=7),  # Increase neighbors
+    'SVC': SVC(),  # Placeholder for SVC
     'Ensemble': VotingClassifier(estimators=[
-        ('rf', RandomForestClassifier(random_state=44, n_jobs=-1)),  # Added n_jobs=-1 for parallelization
-        ('dt', DecisionTreeClassifier(random_state=44)),
-        ('knn', KNeighborsClassifier(n_jobs=-1))  # Added n_jobs=-1 for parallelization
+        ('rf', RandomForestClassifier(random_state=44, max_depth=15, n_estimators=100)),
+        ('dt', DecisionTreeClassifier(random_state=44, max_depth=15)),
+        ('knn', KNeighborsClassifier(n_jobs=-1, n_neighbors=7))
     ], voting='hard')
 }
 
-# Define parameter grids for tuning
+# Define parameter grids for tuning (with slightly increased values)
 param_grids = {
     'RandomForest': {
-        'n_estimators': [30, 60],  # Reduced options for faster tuning
-        'max_features': ['sqrt'],  # Fixed the issue with 'auto'
-        'max_depth': [10, 20, 30],  # Allow depth up to 30
-        'min_samples_split': [2],
-        'min_samples_leaf': [1],
+        'n_estimators': [100, 150],  # Increased number of estimators for a better model
+        'max_features': ['sqrt'],  # Keep the number of features low
+        'max_depth': [10, 15],  # Increased depth slightly
+        'min_samples_split': [2],  # Keep the split simple
+        'min_samples_leaf': [1],  # Keep the leaf size small
         'bootstrap': [True]
     },
     'DecisionTree': {
-        'max_depth': [10, 20, 30],  # Allow depth up to 30
+        'max_depth': [10, 15],  # Increased depth slightly
         'min_samples_split': [2],
         'min_samples_leaf': [1],
-        'criterion': ['gini']
+        'criterion': ['gini', 'entropy']
     },
     'LogisticRegression': {
-        'C': [0.1, 1],
-        'solver': ['liblinear'],  # Use liblinear for smaller datasets
-        'max_iter': [100]
+        'C': [0.1, 1],  # Limit search space for regularization strength
+        'solver': ['liblinear'],  # Choose faster solver
+        'max_iter': [100]  # Limit iterations for faster convergence
     },
     'KNeighbors': {
-        'n_neighbors': [3, 5],
+        'n_neighbors': [5, 7],  # Increased neighbors slightly
         'weights': ['uniform'],
-        'metric': ['euclidean']
+        'metric': ['euclidean']  # Keep distance metric simple
     },
     'SVC': {
-        'C': [1],  # Fixed C value
-        'gamma': ['auto'],  # Auto gamma setting for SVC
-        'kernel': ['rbf', 'linear', 'poly']  # Testing all three kernels
+        'C': [0.1, 1, 10],  # Tune C with reasonable values
+        'gamma': ['auto', 'scale', 0.1],  # Tune gamma with reasonable values
+        'kernel': ['rbf']  # Stick to rbf kernel for efficiency
     }
 }
+
+# File path for saving/loading hyperparameters
+hyperparameters_file = '../data/binary/hyperparameters.json'
+
+# Load hyperparameters from JSON if they exist
+if os.path.exists(hyperparameters_file):
+    with open(hyperparameters_file, 'r') as f:
+        saved_hyperparameters = json.load(f)
+    print("Loaded saved hyperparameters from file.")
+else:
+    saved_hyperparameters = {}
 
 # Hyperparameter tuning flag
 retune_hyperparameters = True  # Change this flag to False to skip tuning
@@ -107,7 +115,10 @@ for model_name, clf in classifiers.items():
     if model_name == "NaiveBayes" or model_name == "Ensemble":
         continue
     # Check if we need to retune
-    if retune_hyperparameters:
+    if model_name in saved_hyperparameters and not retune_hyperparameters:
+        print(f"Using saved hyperparameters for {model_name}.")
+        clf.set_params(**saved_hyperparameters[model_name])
+    else:
         print(f"\nTuning hyperparameters for {model_name}...")
 
         # Set up GridSearchCV for the current model with parallelization
@@ -117,27 +128,34 @@ for model_name, clf in classifiers.items():
         # Get the best parameters and model
         best_params = grid_search.best_params_
 
+        # Save the best parameters for later use
+        saved_hyperparameters[model_name] = best_params
+
         # Create the model with the best parameters
         clf.set_params(**best_params)
         print(f"Best hyperparameters for {model_name}: {best_params}")
-    else:
-        print(f"Skipping tuning for {model_name}, using default parameters.")
-    
-    # Perform cross-validation with parallelization
+
+# Save hyperparameters to JSON file after tuning
+with open(hyperparameters_file, 'w') as f:
+    json.dump(saved_hyperparameters, f, indent=4)
+    print(f"Saved hyperparameters to {hyperparameters_file}")
+
+# Perform cross-validation with parallelization and print results
+for model_name, clf in classifiers.items():
     print(f"\nEvaluating {model_name}...")
     cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
     print(f"Cross-Validation Accuracy Scores: {cv_results}")
     print(f"Mean Accuracy: {cv_results.mean():.4f}")
     print(f"Standard Deviation: {cv_results.std():.4f}")
-    
+
     # Fit the model and predict
     clf.fit(X_final, y)
     y_pred = clf.predict(X_final)
-    
+
     # Confusion Matrix
     cm = confusion_matrix(y, y_pred)
     print(f"Confusion Matrix for {model_name}:\n{cm}")
-    
+
     # Classification Report
     report = classification_report(y, y_pred)
     print(f"Classification Report for {model_name}:\n{report}")
