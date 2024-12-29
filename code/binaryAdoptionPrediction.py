@@ -9,6 +9,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 import multiprocessing
 
 # Load dataset
@@ -31,6 +33,16 @@ X_numerical = X[numerical_vars]
 
 # Combine numerical and categorical features back together
 X = pd.concat([X_numerical, X_categorical], axis=1)
+
+# Standardize the data before applying PCA
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Apply PCA to reduce dimensionality
+pca = PCA(n_components=0.90)  # Keep 90% of the variance
+X_pca = pca.fit_transform(X_scaled)
+print(f"Original shape: {X_scaled.shape}")
+print(f"Reduced shape after PCA: {X_pca.shape}")
 
 # Set the target variable
 y = df['AdoptionBinary']
@@ -125,7 +137,7 @@ for model_name, clf in classifiers.items():
 
             # Set up GridSearchCV for the current model with parallelization
             grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-            grid_search.fit(X, y)
+            grid_search.fit(X_pca, y)  # Use PCA-transformed data
 
             # Get the best parameters and model
             best_params = grid_search.best_params_
@@ -143,14 +155,14 @@ for model_name, clf in classifiers.items():
     
     # Perform cross-validation with parallelization
     print(f"\nEvaluating {model_name}...")
-    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+    cv_results = cross_val_score(clf, X_pca, y, cv=5, scoring='accuracy', n_jobs=-1)  # Use PCA-transformed data
     print(f"Cross-Validation Accuracy Scores: {cv_results}")
     print(f"Mean Accuracy: {cv_results.mean():.4f}")
     print(f"Standard Deviation: {cv_results.std():.4f}")
     
     # Fit the model and predict
-    clf.fit(X, y)
-    y_pred = clf.predict(X)
+    clf.fit(X_pca, y)  # Use PCA-transformed data
+    y_pred = clf.predict(X_pca)  # Use PCA-transformed data
     
     # Confusion Matrix
     cm = confusion_matrix(y, y_pred)
@@ -162,8 +174,8 @@ for model_name, clf in classifiers.items():
 
 # Example of evaluating ensemble (VotingClassifier)
 ensemble_clf = classifiers['Ensemble']
-ensemble_clf.fit(X, y)
-y_pred_ensemble = ensemble_clf.predict(X)
+ensemble_clf.fit(X_pca, y)  # Use PCA-transformed data
+y_pred_ensemble = ensemble_clf.predict(X_pca)  # Use PCA-transformed data
 
 # Confusion Matrix for Ensemble
 cm_ensemble = confusion_matrix(y, y_pred_ensemble)
@@ -182,7 +194,7 @@ results = {
 
 # Cross-validation results and performance summary
 for model_name, clf in classifiers.items():
-    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
+    cv_results = cross_val_score(clf, X_pca, y, cv=5, scoring='accuracy', n_jobs=-1)  # Use PCA-transformed data
     results['Model'].append(model_name)
     results['Mean Accuracy'].append(cv_results.mean())
     results['Std Accuracy'].append(cv_results.std())
