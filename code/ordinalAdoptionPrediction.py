@@ -105,7 +105,7 @@ else:
     saved_hyperparameters = {}
 
 # Hyperparameter tuning flag
-retune_hyperparameters = True  # Change this flag to False to skip tuning
+retune_hyperparameters = False  # Change this flag to False to skip tuning
 
 # Perform hyperparameter tuning (GridSearchCV) if necessary
 for model_name, clf in classifiers.items():
