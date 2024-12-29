@@ -1,3 +1,4 @@
+# BASED ON ORDINAL2, not the original ordinal
 import pandas as pd
 import numpy as np
 import json
