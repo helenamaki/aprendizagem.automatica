@@ -16,11 +16,11 @@ import os
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 
 # Filter for dogs (Type == 1) and cats (Type == 2)
-df_dogs = df[df['Type'] == 1]
-df_cats = df[df['Type'] == 2]
+df_dogs = df[df['Type'] == 1]  # Dogs
+df_cats = df[df['Type'] == 2]  # Cats
 
 # Define a function to run the model for a given subset and save results
-def run_model_on_subset(df_subset, output_folder):
+def run_model_on_subset(df_subset, output_folder, hyperparameters_file):
     # Create the new binary target (1 for adoption, 0 for not adopted)
     df_subset['AdoptionBinary'] = df_subset['AdoptionSpeed'].apply(lambda x: 1 if x != 4 else 0)
 
@@ -102,19 +102,16 @@ def run_model_on_subset(df_subset, output_folder):
         }
     }
 
-    # File path for saving/loading hyperparameters
-    hyperparameters_file = os.path.join(output_folder, 'hyperparameters.json')
-
     # Load hyperparameters from JSON if they exist
     if os.path.exists(hyperparameters_file):
         with open(hyperparameters_file, 'r') as f:
             saved_hyperparameters = json.load(f)
-        print("Loaded saved hyperparameters from file.")
+        print(f"Loaded saved hyperparameters from {hyperparameters_file}.")
     else:
         saved_hyperparameters = {}
 
     # Hyperparameter tuning flag
-    retune_hyperparameters = True  # Change this flag to False to skip tuning
+    retune_hyperparameters = not bool(saved_hyperparameters)  # If no hyperparameters found, retune
 
     # Perform hyperparameter tuning (GridSearchCV) if necessary
     for model_name, clf in classifiers.items():
@@ -179,34 +176,7 @@ def run_model_on_subset(df_subset, output_folder):
     report_ensemble = classification_report(y, y_pred_ensemble)
     print(f"Classification Report for Ensemble:\n{report_ensemble}")
 
-    # Optionally: Save all results in a summary dataframe
-    results = {
-        'Model': [],
-        'Mean Accuracy': [],
-        'Std Accuracy': []
-    }
 
-    # Cross-validation results and performance summary
-    for model_name, clf in classifiers.items():
-        cv_results = cross_val_score(clf, X_final, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-        results['Model'].append(model_name)
-        results['Mean Accuracy'].append(cv_results.mean())
-        results['Std Accuracy'].append(cv_results.std())
-
-    # Convert results to DataFrame for easy visualization
-    summary_df = pd.DataFrame(results)
-    summary_df = summary_df.sort_values(by='Mean Accuracy', ascending=False)
-    print("\nSummary of Model Performance:\n")
-    print(summary_df)
-
-    # Save summary to file
-    summary_df.to_csv(os.path.join(output_folder, 'model_performance_summary.csv'), index=False)
-    print(f"Saved model performance summary to {output_folder}/model_performance_summary.csv")
-
-# Create output folders for cats and dogs if they don't exist
-os.makedirs('binaryCats', exist_ok=True)
-os.makedirs('binaryDogs', exist_ok=True)
-
-# Run the model for cats and dogs separately
-run_model_on_subset(df_cats, 'binaryCats')
-run_model_on_subset(df_dogs, 'binaryDogs')
+# Run model for dogs and cats separately
+run_model_on_subset(df_dogs, '../data/binaryDogs', '../data/binaryDogHyperparameters.json')
+run_model_on_subset(df_cats, '../data/binaryCats', '../data/binaryCatHyperparameters.json')
