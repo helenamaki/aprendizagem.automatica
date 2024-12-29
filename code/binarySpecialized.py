@@ -15,9 +15,9 @@ import os
 # Load dataset
 df = pd.read_csv('../data/Processed_PetFinder_dataset.csv')
 
-# Filter for cats (Type == 1) and dogs (Type == 2)
-df_cats = df[df['Type'] == 1]
-df_dogs = df[df['Type'] == 2]
+# Filter for dogs (Type == 1) and cats (Type == 2)
+df_dogs = df[df['Type'] == 1]
+df_cats = df[df['Type'] == 2]
 
 # Define a function to run the model for a given subset and save results
 def run_model_on_subset(df_subset, output_folder):
