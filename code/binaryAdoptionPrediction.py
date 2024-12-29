@@ -31,18 +31,25 @@ numerical_vars = X.select_dtypes(exclude=['object']).columns.tolist()
 X_categorical = pd.get_dummies(X[categorical_vars], drop_first=True)
 X_numerical = X[numerical_vars]
 
-# Combine numerical and categorical features back together
-X = pd.concat([X_numerical, X_categorical], axis=1)
+# Apply PCA to the .contains columns
+X_contains = X_categorical.filter(regex='.*\.contains$')
 
-# Standardize the data before applying PCA
+# Scale the data before PCA
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_contains_scaled = scaler.fit_transform(X_contains)
 
-# Apply PCA to reduce dimensionality
-pca = PCA(n_components=0.90)  # Keep 90% of the variance
-X_pca = pca.fit_transform(X_scaled)
-print(f"Original shape: {X_scaled.shape}")
-print(f"Reduced shape after PCA: {X_pca.shape}")
+# Apply PCA with 5 components
+pca = PCA(n_components=5)
+X_contains_pca = pca.fit_transform(X_contains_scaled)
+
+# Print the amount of variance explained by the 5 components
+print(f"Total variance explained by 5 components: {np.sum(pca.explained_variance_ratio_):.4f}")
+
+# Combine the PCA-transformed .contains columns with the rest of the dataset
+X_numerical = X_numerical.reset_index(drop=True)
+X_categorical = X_categorical.drop(X_contains.columns, axis=1).reset_index(drop=True)
+
+X = pd.concat([X_numerical, X_categorical, pd.DataFrame(X_contains_pca)], axis=1)
 
 # Set the target variable
 y = df['AdoptionBinary']
@@ -77,7 +84,7 @@ classifiers = {
     'LogisticRegression': LogisticRegression(random_state=44),
     'NaiveBayes': GaussianNB(),
     'KNeighbors': KNeighborsClassifier(),
-    'SVC': SVC(random_state=44),
+    'SVC': SVC(C=1, gamma="auto", kernel="rbf"),  # SVC with fixed hyperparameters
     'Ensemble': VotingClassifier(estimators=[
         ('rf', RandomForestClassifier(random_state=44)),
         ('dt', DecisionTreeClassifier(random_state=44)),
@@ -89,7 +96,7 @@ classifiers = {
 param_grids = {
     'RandomForest': {
         'n_estimators': [100, 200, 500],
-        'max_features': ['auto', 'sqrt', 'log2'],
+        'max_features': ['sqrt', 'log2'],
         'max_depth': [None, 10, 20],
         'min_samples_split': [2, 5],
         'min_samples_leaf': [1, 2],
@@ -110,11 +117,6 @@ param_grids = {
         'n_neighbors': [3, 5, 10],
         'weights': ['uniform', 'distance'],
         'metric': ['euclidean', 'manhattan']
-    },
-    'SVC': {
-        'C': [0.1, 1, 10],
-        'kernel': ['linear', 'rbf'],
-        'gamma': ['scale', 'auto']
     }
 }
 
@@ -123,7 +125,7 @@ retune_hyperparameters = True  # Change this flag to False to skip tuning
 
 # Perform hyperparameter tuning (GridSearchCV) if necessary
 for model_name, clf in classifiers.items():
-    if model_name == "NaiveBayes" or model_name == "Ensemble":
+    if model_name == "NaiveBayes" or model_name == "Ensemble" or model_name == "SVC":
         continue
     # Check if we need to retune
     if retune_hyperparameters:
@@ -137,7 +139,7 @@ for model_name, clf in classifiers.items():
 
             # Set up GridSearchCV for the current model with parallelization
             grid_search = GridSearchCV(clf, param_grids[model_name], cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
-            grid_search.fit(X_pca, y)  # Use PCA-transformed data
+            grid_search.fit(X, y)
 
             # Get the best parameters and model
             best_params = grid_search.best_params_
@@ -155,14 +157,14 @@ for model_name, clf in classifiers.items():
     
     # Perform cross-validation with parallelization
     print(f"\nEvaluating {model_name}...")
-    cv_results = cross_val_score(clf, X_pca, y, cv=5, scoring='accuracy', n_jobs=-1)  # Use PCA-transformed data
+    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
     print(f"Cross-Validation Accuracy Scores: {cv_results}")
     print(f"Mean Accuracy: {cv_results.mean():.4f}")
     print(f"Standard Deviation: {cv_results.std():.4f}")
     
     # Fit the model and predict
-    clf.fit(X_pca, y)  # Use PCA-transformed data
-    y_pred = clf.predict(X_pca)  # Use PCA-transformed data
+    clf.fit(X, y)
+    y_pred = clf.predict(X)
     
     # Confusion Matrix
     cm = confusion_matrix(y, y_pred)
@@ -174,8 +176,8 @@ for model_name, clf in classifiers.items():
 
 # Example of evaluating ensemble (VotingClassifier)
 ensemble_clf = classifiers['Ensemble']
-ensemble_clf.fit(X_pca, y)  # Use PCA-transformed data
-y_pred_ensemble = ensemble_clf.predict(X_pca)  # Use PCA-transformed data
+ensemble_clf.fit(X, y)
+y_pred_ensemble = ensemble_clf.predict(X)
 
 # Confusion Matrix for Ensemble
 cm_ensemble = confusion_matrix(y, y_pred_ensemble)
@@ -194,7 +196,7 @@ results = {
 
 # Cross-validation results and performance summary
 for model_name, clf in classifiers.items():
-    cv_results = cross_val_score(clf, X_pca, y, cv=5, scoring='accuracy', n_jobs=-1)  # Use PCA-transformed data
+    cv_results = cross_val_score(clf, X, y, cv=5, scoring='accuracy', n_jobs=-1)  # n_jobs=-1 for parallelization
     results['Model'].append(model_name)
     results['Mean Accuracy'].append(cv_results.mean())
     results['Std Accuracy'].append(cv_results.std())
