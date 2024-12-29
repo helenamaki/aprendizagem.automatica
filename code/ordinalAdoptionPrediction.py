@@ -174,11 +174,17 @@ for model_name, clf in classifiers.items():
     print(f"KFold MAE scores for {model_name}: {mae_scores}")
     print(f"KFold Accuracy scores for {model_name}: {accuracy_scores}")
     
+    # Calculate standard deviation of MAE and accuracy
+    std_mae = np.std(mae_scores)
+    std_accuracy = np.std(accuracy_scores)
+    
     # Store results in the summary
     summary.append({
         'Model': model_name,
         'Mean Absolute Error (MAE)': mae,
-        'Accuracy': accuracy
+        'Accuracy': accuracy,
+        'Std MAE': std_mae,
+        'Std Accuracy': std_accuracy
     })
 
 # Now add the ensemble model to the summary
@@ -211,11 +217,17 @@ for train_idx, test_idx in kf_ensemble.split(X_final):
 print(f"KFold MAE scores for Ensemble (VotingClassifier): {ensemble_mae_scores}")
 print(f"KFold Accuracy scores for Ensemble (VotingClassifier): {ensemble_accuracy_scores}")
 
+# Calculate standard deviation for the ensemble
+ensemble_std_mae = np.std(ensemble_mae_scores)
+ensemble_std_accuracy = np.std(ensemble_accuracy_scores)
+
 # Store results for the ensemble model
 summary.append({
     'Model': 'Ensemble (VotingClassifier)',
     'Mean Absolute Error (MAE)': ensemble_mae,
-    'Accuracy': ensemble_accuracy
+    'Accuracy': ensemble_accuracy,
+    'Std MAE': ensemble_std_mae,
+    'Std Accuracy': ensemble_std_accuracy
 })
 
 # Print out a summary table, sorted by MAE
